@@ -15,6 +15,15 @@ function Shell({ children }) {
         <Link to="/admin" className="hover:text-brand-600">Admin</Link>
         <span className="mx-2">·</span>
         <span>Palm Meadows Aeromodelling Camp</span>
+        <span className="mx-2">·</span>
+        <a
+          href="https://www.airmodelcrafts.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-brand-600"
+        >
+          Air Model Crafts
+        </a>
       </footer>
     </div>
   );
