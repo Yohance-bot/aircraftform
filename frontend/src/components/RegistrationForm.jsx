@@ -36,7 +36,6 @@ const initialState = {
 };
 
 export default function RegistrationForm() {
-  const [tab, setTab] = useState("register");
   const [form, setForm] = useState(initialState);
   const [errors, setErrors] = useState({});
   // idle | submitting | celebrating | success | error
@@ -127,131 +126,124 @@ export default function RegistrationForm() {
 
       <div className="w-full max-w-[600px]">
         <Header />
-
-        <Tabs active={tab} onChange={setTab} />
-
-        {tab === "register" ? (
-          status === "success" ? (
-            <SuccessCard onReset={resetForm} />
-          ) : status === "celebrating" ? (
-            <CelebratingCard />
-          ) : (
-            <div className="rounded-2xl bg-white/90 backdrop-blur shadow-card border border-brand-100 p-6 sm:p-8">
-              <Badges />
-
-              <form className="mt-6 space-y-5" onSubmit={handleSubmit} noValidate>
-                <TextField
-                  label="Parent / Guardian Name"
-                  required
-                  value={form.parent_name}
-                  onChange={(v) => updateField("parent_name", v)}
-                  placeholder="e.g. Priya Sharma"
-                  error={errors.parent_name}
-                />
-                <TextField
-                  label="Child's Name"
-                  required
-                  value={form.child_name}
-                  onChange={(v) => updateField("child_name", v)}
-                  placeholder="e.g. Arjun Sharma"
-                  error={errors.child_name}
-                />
-
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <TextField
-                    label="Phone Number"
-                    required
-                    type="tel"
-                    value={form.phone}
-                    onChange={(v) => updateField("phone", v)}
-                    placeholder="98XXXXXXXX"
-                    error={errors.phone}
-                  />
-                  <TextField
-                    label="Email"
-                    required
-                    type="email"
-                    value={form.email}
-                    onChange={(v) => updateField("email", v)}
-                    placeholder="you@email.com"
-                    error={errors.email}
-                  />
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <SelectField
-                    label="Age Group"
-                    required
-                    value={form.age_group}
-                    onChange={(v) => updateField("age_group", v)}
-                    options={AGE_GROUPS}
-                    placeholder="Select age group"
-                    error={errors.age_group}
-                  />
-                  <SelectField
-                    label="Class / Grade"
-                    required
-                    value={form.class_grade}
-                    onChange={(v) => updateField("class_grade", v)}
-                    options={GRADES}
-                    placeholder="Select grade"
-                    error={errors.class_grade}
-                  />
-                </div>
-
-                <TextField
-                  label="Villa / Flat Number"
-                  value={form.villa_flat_number}
-                  onChange={(v) => updateField("villa_flat_number", v)}
-                  placeholder="e.g. Villa 42, Block C"
-                  helper="Helps us coordinate logistics for Palm Meadows residents"
-                />
-
-                <SelectField
-                  label="Batch Preference"
-                  value={form.batch_preference}
-                  onChange={(v) => updateField("batch_preference", v)}
-                  options={BATCHES}
-                  placeholder="Choose a batch"
-                />
-
-                <TextAreaField
-                  label="Any Questions or Special Requirements"
-                  value={form.special_requirements}
-                  onChange={(v) => updateField("special_requirements", v)}
-                  placeholder="e.g. My child has a nut allergy, or — Can siblings join the same batch?"
-                />
-
-                {status === "error" && (
-                  <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
-                    {errorMessage}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={status === "submitting"}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 disabled:bg-brand-300 disabled:cursor-not-allowed text-white font-semibold text-base py-3.5 shadow-card transition-colors"
-                >
-                  {status === "submitting" ? (
-                    <>
-                      <Spinner />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      Register &amp; Proceed to Payment
-                      <span aria-hidden>→</span>
-                    </>
-                  )}
-                </button>
-
-                <ProgressHint progress={progress} />
-              </form>
-            </div>
-          )
+        {status === "success" ? (
+          <SuccessCard onReset={resetForm} />
+        ) : status === "celebrating" ? (
+          <CelebratingCard />
         ) : (
-          <TrackerPlaceholder />
+          <div className="rounded-2xl bg-white/90 backdrop-blur shadow-card border border-brand-100 p-6 sm:p-8">
+            <Badges />
+
+            <form className="mt-6 space-y-5" onSubmit={handleSubmit} noValidate>
+              <TextField
+                label="Parent / Guardian Name"
+                required
+                value={form.parent_name}
+                onChange={(v) => updateField("parent_name", v)}
+                placeholder="e.g. Priya Sharma"
+                error={errors.parent_name}
+              />
+              <TextField
+                label="Child's Name"
+                required
+                value={form.child_name}
+                onChange={(v) => updateField("child_name", v)}
+                placeholder="e.g. Arjun Sharma"
+                error={errors.child_name}
+              />
+
+              <div className="grid sm:grid-cols-2 gap-5">
+                <TextField
+                  label="Phone Number"
+                  required
+                  type="tel"
+                  value={form.phone}
+                  onChange={(v) => updateField("phone", v)}
+                  placeholder="98XXXXXXXX"
+                  error={errors.phone}
+                />
+                <TextField
+                  label="Email"
+                  required
+                  type="email"
+                  value={form.email}
+                  onChange={(v) => updateField("email", v)}
+                  placeholder="you@email.com"
+                  error={errors.email}
+                />
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-5">
+                <SelectField
+                  label="Age Group"
+                  required
+                  value={form.age_group}
+                  onChange={(v) => updateField("age_group", v)}
+                  options={AGE_GROUPS}
+                  placeholder="Select age group"
+                  error={errors.age_group}
+                />
+                <SelectField
+                  label="Class / Grade"
+                  required
+                  value={form.class_grade}
+                  onChange={(v) => updateField("class_grade", v)}
+                  options={GRADES}
+                  placeholder="Select grade"
+                  error={errors.class_grade}
+                />
+              </div>
+
+              <TextField
+                label="Villa / Flat Number"
+                value={form.villa_flat_number}
+                onChange={(v) => updateField("villa_flat_number", v)}
+                placeholder="e.g. Villa 42, Block C"
+                helper="Helps us coordinate logistics for Palm Meadows residents"
+              />
+
+              <SelectField
+                label="Batch Preference"
+                value={form.batch_preference}
+                onChange={(v) => updateField("batch_preference", v)}
+                options={BATCHES}
+                placeholder="Choose a batch"
+              />
+
+              <TextAreaField
+                label="Any Questions or Special Requirements"
+                value={form.special_requirements}
+                onChange={(v) => updateField("special_requirements", v)}
+                placeholder="e.g. My child has a nut allergy, or — Can siblings join the same batch?"
+              />
+
+              {status === "error" && (
+                <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+                  {errorMessage}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={status === "submitting"}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 disabled:bg-brand-300 disabled:cursor-not-allowed text-white font-semibold text-base py-3.5 shadow-card transition-colors"
+              >
+                {status === "submitting" ? (
+                  <>
+                    <Spinner />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    Register &amp; Proceed to Payment
+                    <span aria-hidden>→</span>
+                  </>
+                )}
+              </button>
+
+              <ProgressHint progress={progress} />
+            </form>
+          </div>
         )}
       </div>
     </>
@@ -261,6 +253,11 @@ export default function RegistrationForm() {
 function Header() {
   return (
     <div className="text-center mb-6">
+      <img
+        src="/palm-meadows-logo.png"
+        alt="Palm Meadows Resort"
+        className="mx-auto mb-4 h-auto w-40 sm:w-44"
+      />
       <div className="inline-flex items-center gap-2 text-brand-700 font-semibold tracking-wide text-xs uppercase">
         <span className="inline-block h-2 w-2 rounded-full bg-brand-500 animate-bob" />
         Palm Meadows Aeromodelling Club
@@ -272,32 +269,6 @@ function Header() {
         Ten days of building, flying, and a whole lot of fun for young pilots.
         Reserve your child's spot below.
       </p>
-    </div>
-  );
-}
-
-function Tabs({ active, onChange }) {
-  const tabs = [
-    { id: "register", label: "Register" },
-    { id: "tracker", label: "Tracker" },
-  ];
-  return (
-    <div className="flex items-center gap-1 rounded-full bg-white/70 border border-brand-100 p-1 w-fit mx-auto mb-5 shadow-sm">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onChange(t.id)}
-          className={
-            "px-5 py-2 text-sm font-semibold rounded-full transition-colors " +
-            (active === t.id
-              ? "bg-brand-500 text-white shadow-sm"
-              : "text-slate-600 hover:text-brand-700")
-          }
-        >
-          {t.label}
-        </button>
-      ))}
     </div>
   );
 }
@@ -463,15 +434,3 @@ function SuccessCard({ onReset }) {
   );
 }
 
-function TrackerPlaceholder() {
-  return (
-    <div className="rounded-2xl bg-white/90 backdrop-blur shadow-card border border-brand-100 p-10 text-center">
-      <div className="text-5xl">🛰</div>
-      <h2 className="mt-3 text-xl font-bold text-slate-900">Tracker · coming soon</h2>
-      <p className="mt-2 text-slate-600 text-sm max-w-sm mx-auto">
-        Once batches begin, parents will be able to check attendance, project
-        progress, and photos right here.
-      </p>
-    </div>
-  );
-}
