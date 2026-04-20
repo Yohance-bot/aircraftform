@@ -12,8 +12,6 @@ function Shell({ children }) {
       <footer className="text-center text-xs text-slate-500 py-6">
         <Link to="/" className="hover:text-brand-600">Home</Link>
         <span className="mx-2">·</span>
-        <Link to="/admin" className="hover:text-brand-600">Admin</Link>
-        <span className="mx-2">·</span>
         <span>Palm Meadows Aeromodelling Camp</span>
         <span className="mx-2">·</span>
         <a
