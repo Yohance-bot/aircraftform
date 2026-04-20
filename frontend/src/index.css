@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-cream text-slate-800 font-sans antialiased;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% 0%, #FFE9CF 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, #FFD9B0 0%, transparent 55%),
+    linear-gradient(#FDF6EC, #FDF6EC);
+}
+
+/* Dotted horizon line the plane "takes off" from */
+.runway {
+  background-image: linear-gradient(
+    to right,
+    rgba(180, 68, 8, 0.35) 0 12px,
+    transparent 12px 28px
+  );
+  background-size: 28px 2px;
+  background-repeat: repeat-x;
+}
