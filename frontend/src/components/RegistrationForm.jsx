@@ -660,8 +660,8 @@ function PhoneField({
             ▾
           </button>
           {isOpen && filteredCountryCodes.length > 0 && (
-            <div className="absolute z-20 mt-2 w-full max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
-              {filteredCountryCodes.slice(0, 20).map((opt) => (
+            <div className="absolute z-20 mt-2 w-full max-h-72 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white shadow-lg">
+              {filteredCountryCodes.map((opt) => (
                 <button
                   key={opt.code + opt.label}
                   type="button"
