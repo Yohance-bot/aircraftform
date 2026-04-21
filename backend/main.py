@@ -10,6 +10,7 @@ from typing import Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
@@ -34,11 +35,24 @@ app.add_middleware(
 def on_startup() -> None:
     """Create tables on startup if they don't already exist."""
     Base.metadata.create_all(bind=engine)
+    ensure_registration_columns()
+
+
+def ensure_registration_columns() -> None:
+    inspector = inspect(engine)
+    if "registrations" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("registrations")}
+    if "phone_country_code" not in existing_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE registrations ADD COLUMN phone_country_code VARCHAR(10)"))
 
 
 class RegistrationIn(BaseModel):
     parent_name: str = Field(..., min_length=1, max_length=200)
     child_name: str = Field(..., min_length=1, max_length=200)
+    phone_country_code: str = Field(..., min_length=1, max_length=10)
     phone: str = Field(..., min_length=1, max_length=50)
     email: EmailStr
     age_group: AgeGroup
@@ -52,6 +66,7 @@ class RegistrationOut(BaseModel):
     id: int
     parent_name: str
     child_name: str
+    phone_country_code: str | None
     phone: str
     email: str
     age_group: str
@@ -87,6 +102,13 @@ def health() -> dict[str, str]:
 
 @app.post("/api/register", response_model=RegisterResponse)
 def register(payload: RegistrationIn, db: Session = Depends(get_db)) -> RegisterResponse:
+    normalized_country_code = re.sub(r"\s+", "", payload.phone_country_code.strip())
+    if not re.fullmatch(r"\+\d{1,4}", normalized_country_code):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Select a valid country code.",
+        )
+
     normalized_phone = re.sub(r"\s+", "", payload.phone.strip())
     if not re.fullmatch(r"\+\d{10,15}", normalized_phone):
         raise HTTPException(
@@ -108,6 +130,7 @@ def register(payload: RegistrationIn, db: Session = Depends(get_db)) -> Register
     record = Registration(
         parent_name=payload.parent_name.strip(),
         child_name=payload.child_name.strip(),
+        phone_country_code=normalized_country_code,
         phone=normalized_phone,
         email=normalized_email,
         age_group=payload.age_group,

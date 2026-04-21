@@ -6,12 +6,14 @@ import { fetchRegistrations } from "../api.js";
 const COLUMNS = [
   { key: "parent_name", label: "Parent" },
   { key: "child_name", label: "Child" },
+  { key: "phone_country_code", label: "Country Code" },
   { key: "phone", label: "Phone" },
   { key: "email", label: "Email" },
   { key: "age_group", label: "Age Group" },
   { key: "class_grade", label: "Class" },
   { key: "villa_flat_number", label: "Villa" },
   { key: "batch_preference", label: "Batch" },
+  { key: "special_requirements", label: "Special Requirements" },
   { key: "payment_status", label: "Payment" },
   { key: "created_at", label: "Registered At" },
 ];
@@ -21,6 +23,7 @@ const CSV_COLUMNS = [
   { key: "id", label: "ID" },
   { key: "parent_name", label: "Parent Name" },
   { key: "child_name", label: "Child Name" },
+  { key: "phone_country_code", label: "Country Code" },
   { key: "phone", label: "Phone" },
   { key: "email", label: "Email" },
   { key: "age_group", label: "Age Group" },
@@ -181,7 +184,12 @@ export default function AdminDashboard() {
                   {COLUMNS.map((c) => (
                     <td
                       key={c.key}
-                      className="px-4 py-3 text-slate-700 whitespace-nowrap"
+                      className={
+                        "px-4 py-3 text-slate-700 " +
+                        (c.key === "special_requirements"
+                          ? "whitespace-normal min-w-[18rem] max-w-[28rem] align-top"
+                          : "whitespace-nowrap")
+                      }
                     >
                       {formatCell(c.key, r[c.key])}
                     </td>
@@ -218,6 +226,9 @@ function formatCell(key, value) {
       </span>
     );
   }
+    if (key === "special_requirements") {
+      return String(value);
+    }
   return String(value);
 }
 

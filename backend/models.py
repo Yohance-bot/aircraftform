@@ -16,6 +16,7 @@ class Registration(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     parent_name: Mapped[str] = mapped_column(String(200), nullable=False)
     child_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    phone_country_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     phone: Mapped[str] = mapped_column(String(50), nullable=False)
     email: Mapped[str] = mapped_column(String(200), nullable=False)
     age_group: Mapped[str] = mapped_column(String(50), nullable=False)
