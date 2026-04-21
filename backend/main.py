@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -16,7 +17,7 @@ from models import Registration
 
 ADMIN_KEY = os.getenv("ADMIN_KEY", "change-me-before-deploy")
 
-AgeGroup = Literal["6-8 years", "9-11 years", "12-14 years"]
+AgeGroup = Literal["6-9 years", "10-14 years"]
 
 app = FastAPI(title="AMC Registration API", version="1.0.0")
 
@@ -86,11 +87,29 @@ def health() -> dict[str, str]:
 
 @app.post("/api/register", response_model=RegisterResponse)
 def register(payload: RegistrationIn, db: Session = Depends(get_db)) -> RegisterResponse:
+    normalized_phone = re.sub(r"\s+", "", payload.phone.strip())
+    if not re.fullmatch(r"\+\d{10,15}", normalized_phone):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Phone number must include country code and 10 to 15 digits.",
+        )
+
+    normalized_email = str(payload.email).strip().lower()
+    if (
+        ".." in normalized_email
+        or normalized_email.startswith(".")
+        or normalized_email.endswith(".")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Enter a valid email address.",
+        )
+
     record = Registration(
         parent_name=payload.parent_name.strip(),
         child_name=payload.child_name.strip(),
-        phone=payload.phone.strip(),
-        email=str(payload.email).strip().lower(),
+        phone=normalized_phone,
+        email=normalized_email,
         age_group=payload.age_group,
         class_grade=payload.class_grade.strip(),
         villa_flat_number=(payload.villa_flat_number or "").strip() or None,

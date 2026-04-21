@@ -3,9 +3,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { submitRegistration } from "../api.js";
 import PlaneSky from "./PlaneSky.jsx";
 
-const AGE_GROUPS = ["6-8 years", "9-11 years", "12-14 years"];
+const AGE_GROUPS = ["6-9 years", "10-14 years"];
 const GRADES = Array.from({ length: 10 }, (_, i) => `Grade ${i + 1}`);
-const BATCHES = ["4th May onwards", "Next available batch"];
+const BATCHES = ["May 4 - May 15", "May 11 - May 22"];
+const COUNTRY_CODES = [
+  { code: "+91", label: "India (+91)" },
+  { code: "+1", label: "USA/Canada (+1)" },
+  { code: "+44", label: "UK (+44)" },
+  { code: "+61", label: "Australia (+61)" },
+  { code: "+65", label: "Singapore (+65)" },
+  { code: "+971", label: "UAE (+971)" },
+];
+const EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
 const REQUIRED_FIELDS = [
   "parent_name",
@@ -26,6 +35,7 @@ const ALL_FIELDS = [
 const initialState = {
   parent_name: "",
   child_name: "",
+  phone_country_code: "+91",
   phone: "",
   email: "",
   age_group: "",
@@ -34,6 +44,24 @@ const initialState = {
   batch_preference: "",
   special_requirements: "",
 };
+
+function onlyDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isLikelyValidEmail(value) {
+  if (!value || value.length > 254 || value.includes("..")) return false;
+  if (!EMAIL_PATTERN.test(value)) return false;
+  const [local = "", domain = ""] = value.split("@");
+  if (!local || !domain || local.length > 64) return false;
+  if (local.startsWith(".") || local.endsWith(".")) return false;
+  if (domain.startsWith(".") || domain.endsWith(".")) return false;
+  return true;
+}
 
 export default function RegistrationForm() {
   const [form, setForm] = useState(initialState);
@@ -75,10 +103,16 @@ export default function RegistrationForm() {
         next[field] = "Required";
       }
     }
-    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) {
-      next.email = "Enter a valid email";
+    const normalizedEmail = normalizeEmail(form.email);
+    if (normalizedEmail && !isLikelyValidEmail(normalizedEmail)) {
+      next.email = "Enter a valid email address";
     }
-    if (form.phone && !/^[\d+\-\s()]{7,}$/.test(form.phone)) {
+    const phoneDigits = onlyDigits(form.phone);
+    if (phoneDigits && phoneDigits.length < 10) {
+      next.phone = "Phone number must have at least 10 digits";
+    } else if (phoneDigits.length > 14) {
+      next.phone = "Phone number is too long";
+    } else if (phoneDigits && /^(\d)\1+$/.test(phoneDigits)) {
       next.phone = "Enter a valid phone number";
     }
     setErrors(next);
@@ -93,7 +127,13 @@ export default function RegistrationForm() {
     setStatus("submitting");
     setErrorMessage("");
     try {
-      await submitRegistration(form);
+      const phoneDigits = onlyDigits(form.phone);
+      const payload = {
+        ...form,
+        phone: `${form.phone_country_code}${phoneDigits}`,
+        email: normalizeEmail(form.email),
+      };
+      await submitRegistration(payload);
       // Fly the celebration plane across the sky, then swap in the
       // success card once it's cleared the screen.
       setCelebrationKey((k) => k + 1);
@@ -153,13 +193,12 @@ export default function RegistrationForm() {
               />
 
               <div className="grid sm:grid-cols-2 gap-5">
-                <TextField
-                  label="Phone Number"
+                <PhoneField
+                  countryCode={form.phone_country_code}
+                  onCountryCodeChange={(v) => updateField("phone_country_code", v)}
+                  phoneValue={form.phone}
+                  onPhoneChange={(v) => updateField("phone", v)}
                   required
-                  type="tel"
-                  value={form.phone}
-                  onChange={(v) => updateField("phone", v)}
-                  placeholder="98XXXXXXXX"
                   error={errors.phone}
                 />
                 <TextField
@@ -311,6 +350,55 @@ function TextField({
       />
       {helper && !error && (
         <span className="mt-1 block text-xs text-slate-500">{helper}</span>
+      )}
+      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
+    </label>
+  );
+}
+
+function PhoneField({
+  countryCode,
+  onCountryCodeChange,
+  phoneValue,
+  onPhoneChange,
+  required,
+  error,
+}) {
+  return (
+    <label className="block">
+      <span className="block text-sm font-semibold text-slate-700">
+        Phone Number (WhatsApp No.) {required && <span className="text-brand-600">*</span>}
+      </span>
+      <div className="mt-1.5 grid grid-cols-[9.5rem,1fr] gap-2">
+        <select
+          value={countryCode}
+          onChange={(e) => onCountryCodeChange(e.target.value)}
+          className={inputClass(error) + " mt-0 px-3"}
+          required={required}
+          aria-label="Country code"
+        >
+          {COUNTRY_CODES.map((opt) => (
+            <option key={opt.code} value={opt.code}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="tel"
+          inputMode="numeric"
+          value={phoneValue}
+          onChange={(e) => onPhoneChange(onlyDigits(e.target.value))}
+          placeholder="10+ digit mobile number"
+          className={inputClass(error) + " mt-0"}
+          required={required}
+          minLength={10}
+          maxLength={14}
+        />
+      </div>
+      {!error && (
+        <span className="mt-1 block text-xs text-slate-500">
+          Enter at least 10 digits. Country code will be added automatically.
+        </span>
       )}
       {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
     </label>
