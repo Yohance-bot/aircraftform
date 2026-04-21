@@ -10,27 +10,27 @@ const COUNTRY_CODES = [
   { code: "+91", label: "India (+91)" },
   { code: "+1", label: "USA/Canada (+1)" },
   { code: "+44", label: "UK (+44)" },
-  { code: "+1-242", label: "Bahamas (+1 242)" },
-  { code: "+1-246", label: "Barbados (+1 246)" },
-  { code: "+1-264", label: "Anguilla (+1 264)" },
-  { code: "+1-268", label: "Antigua & Barbuda (+1 268)" },
-  { code: "+1-284", label: "British Virgin Islands (+1 284)" },
-  { code: "+1-340", label: "U.S. Virgin Islands (+1 340)" },
-  { code: "+1-345", label: "Cayman Islands (+1 345)" },
-  { code: "+1-441", label: "Bermuda (+1 441)" },
-  { code: "+1-473", label: "Grenada (+1 473)" },
-  { code: "+1-649", label: "Turks & Caicos (+1 649)" },
-  { code: "+1-664", label: "Montserrat (+1 664)" },
-  { code: "+1-670", label: "Northern Mariana Islands (+1 670)" },
-  { code: "+1-671", label: "Guam (+1 671)" },
-  { code: "+1-684", label: "American Samoa (+1 684)" },
-  { code: "+1-721", label: "Sint Maarten (+1 721)" },
-  { code: "+1-758", label: "Saint Lucia (+1 758)" },
-  { code: "+1-767", label: "Dominica (+1 767)" },
-  { code: "+1-784", label: "St. Vincent & the Grenadines (+1 784)" },
-  { code: "+1-809", label: "Dominican Republic (+1 809)" },
-  { code: "+1-829", label: "Dominican Republic (+1 829)" },
-  { code: "+1-849", label: "Dominican Republic (+1 849)" },
+  { code: "+1242", label: "Bahamas (+1 242)" },
+  { code: "+1246", label: "Barbados (+1 246)" },
+  { code: "+1264", label: "Anguilla (+1 264)" },
+  { code: "+1268", label: "Antigua & Barbuda (+1 268)" },
+  { code: "+1284", label: "British Virgin Islands (+1 284)" },
+  { code: "+1340", label: "U.S. Virgin Islands (+1 340)" },
+  { code: "+1345", label: "Cayman Islands (+1 345)" },
+  { code: "+1441", label: "Bermuda (+1 441)" },
+  { code: "+1473", label: "Grenada (+1 473)" },
+  { code: "+1649", label: "Turks & Caicos (+1 649)" },
+  { code: "+1664", label: "Montserrat (+1 664)" },
+  { code: "+1670", label: "Northern Mariana Islands (+1 670)" },
+  { code: "+1671", label: "Guam (+1 671)" },
+  { code: "+1684", label: "American Samoa (+1 684)" },
+  { code: "+1721", label: "Sint Maarten (+1 721)" },
+  { code: "+1758", label: "Saint Lucia (+1 758)" },
+  { code: "+1767", label: "Dominica (+1 767)" },
+  { code: "+1784", label: "St. Vincent & the Grenadines (+1 784)" },
+  { code: "+1809", label: "Dominican Republic (+1 809)" },
+  { code: "+1829", label: "Dominican Republic (+1 829)" },
+  { code: "+1849", label: "Dominican Republic (+1 849)" },
   { code: "+20", label: "Egypt (+20)" },
   { code: "+27", label: "South Africa (+27)" },
   { code: "+30", label: "Greece (+30)" },
@@ -232,6 +232,9 @@ const COUNTRY_CODES = [
   { code: "+996", label: "Kyrgyzstan (+996)" },
   { code: "+998", label: "Uzbekistan (+998)" },
 ];
+const COUNTRY_CODE_OPTIONS = [...COUNTRY_CODES].sort((a, b) =>
+  a.label.localeCompare(b.label)
+);
 const EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
 const REQUIRED_FIELDS = [
@@ -284,6 +287,9 @@ function isLikelyValidEmail(value) {
 export default function RegistrationForm() {
   const [form, setForm] = useState(initialState);
   const [errors, setErrors] = useState({});
+  const [countrySearch, setCountrySearch] = useState(
+    COUNTRY_CODE_OPTIONS.find((opt) => opt.code === initialState.phone_country_code)?.label || ""
+  );
   // idle | submitting | celebrating | success | error
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -314,12 +320,38 @@ export default function RegistrationForm() {
     }
   }
 
+  function updateCountryCode(code) {
+    const nextCode = code || initialState.phone_country_code;
+    const match = COUNTRY_CODE_OPTIONS.find((opt) => opt.code === nextCode);
+    setForm((prev) => ({ ...prev, phone_country_code: nextCode }));
+    setCountrySearch(match ? match.label : nextCode);
+    if (errors.phone_country_code) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.phone_country_code;
+        return next;
+      });
+    }
+  }
+
+  const filteredCountryCodes = useMemo(() => {
+    const query = String(countrySearch || "").trim().toLowerCase();
+    if (!query) return COUNTRY_CODE_OPTIONS;
+    return COUNTRY_CODE_OPTIONS.filter((opt) => {
+      const haystack = `${opt.label} ${opt.code}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [countrySearch]);
+
   function validate() {
     const next = {};
     for (const field of REQUIRED_FIELDS) {
       if (!String(form[field] || "").trim()) {
         next[field] = "Required";
       }
+    }
+    if (!COUNTRY_CODE_OPTIONS.some((opt) => opt.code === form.phone_country_code)) {
+      next.phone_country_code = "Select a country or region";
     }
     const normalizedEmail = normalizeEmail(form.email);
     if (normalizedEmail && !isLikelyValidEmail(normalizedEmail)) {
@@ -332,6 +364,10 @@ export default function RegistrationForm() {
       next.phone = "Phone number is too long";
     } else if (phoneDigits && /^(\d)\1+$/.test(phoneDigits)) {
       next.phone = "Enter a valid phone number";
+    }
+    if (!countrySearch.trim()) {
+      const match = COUNTRY_CODE_OPTIONS.find((opt) => opt.code === form.phone_country_code);
+      setCountrySearch(match ? match.label : "");
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -413,11 +449,15 @@ export default function RegistrationForm() {
               <div className="grid sm:grid-cols-2 gap-5">
                 <PhoneField
                   countryCode={form.phone_country_code}
-                  onCountryCodeChange={(v) => updateField("phone_country_code", v)}
+                  countrySearch={countrySearch}
+                  onCountrySearchChange={setCountrySearch}
+                  onCountryCodeChange={updateCountryCode}
+                  filteredCountryCodes={filteredCountryCodes}
                   phoneValue={form.phone}
                   onPhoneChange={(v) => updateField("phone", v)}
                   required
                   error={errors.phone}
+                  countryError={errors.phone_country_code}
                 />
                 <TextField
                   label="Email"
@@ -576,31 +616,73 @@ function TextField({
 
 function PhoneField({
   countryCode,
+  countrySearch,
+  onCountrySearchChange,
   onCountryCodeChange,
+  filteredCountryCodes,
   phoneValue,
   onPhoneChange,
   required,
   error,
+  countryError,
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
     <label className="block">
       <span className="block text-sm font-semibold text-slate-700">
         Phone Number (WhatsApp No.) {required && <span className="text-brand-600">*</span>}
       </span>
-      <div className="mt-1.5 grid grid-cols-[9.5rem,1fr] gap-2">
-        <select
-          value={countryCode}
-          onChange={(e) => onCountryCodeChange(e.target.value)}
-          className={inputClass(error) + " mt-0 px-3"}
-          required={required}
-          aria-label="Country code"
-        >
-          {COUNTRY_CODES.map((opt) => (
-            <option key={opt.code} value={opt.code}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+      <div className="mt-1.5 grid grid-cols-[minmax(0,1.15fr),1fr] gap-2">
+        <div className="relative">
+          <input
+            type="text"
+            value={countrySearch}
+            onChange={(e) => {
+              onCountrySearchChange(e.target.value);
+              setIsOpen(true);
+            }}
+            onFocus={() => setIsOpen(true)}
+            onBlur={() => {
+              setTimeout(() => setIsOpen(false), 120);
+            }}
+            placeholder="Search country / region"
+            className={inputClass(countryError) + " mt-0 px-3 pr-8"}
+            required={required}
+            aria-label="Search country or region"
+          />
+          <button
+            type="button"
+            onClick={() => setIsOpen((open) => !open)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            aria-label="Toggle country list"
+          >
+            ▾
+          </button>
+          {isOpen && filteredCountryCodes.length > 0 && (
+            <div className="absolute z-20 mt-2 w-full max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+              {filteredCountryCodes.slice(0, 20).map((opt) => (
+                <button
+                  key={opt.code + opt.label}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onCountryCodeChange(opt.code);
+                    onCountrySearchChange(opt.label);
+                    setIsOpen(false);
+                  }}
+                  className={
+                    "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-brand-50 " +
+                    (countryCode === opt.code ? "bg-brand-50 text-brand-700" : "text-slate-700")
+                  }
+                >
+                  <span className="min-w-0 truncate">{opt.label}</span>
+                  <span className="shrink-0 text-xs font-semibold text-slate-400">{opt.code}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <input
           type="tel"
           inputMode="numeric"
@@ -618,6 +700,7 @@ function PhoneField({
           Enter at least 10 digits. Country code will be added automatically.
         </span>
       )}
+      {countryError && <span className="mt-1 block text-xs text-red-600">{countryError}</span>}
       {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
     </label>
   );
