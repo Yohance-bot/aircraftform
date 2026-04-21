@@ -287,9 +287,6 @@ function isLikelyValidEmail(value) {
 export default function RegistrationForm() {
   const [form, setForm] = useState(initialState);
   const [errors, setErrors] = useState({});
-  const [countrySearch, setCountrySearch] = useState(
-    COUNTRY_CODE_OPTIONS.find((opt) => opt.code === initialState.phone_country_code)?.label || ""
-  );
   // idle | submitting | celebrating | success | error
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -320,38 +317,12 @@ export default function RegistrationForm() {
     }
   }
 
-  function updateCountryCode(code) {
-    const nextCode = code || initialState.phone_country_code;
-    const match = COUNTRY_CODE_OPTIONS.find((opt) => opt.code === nextCode);
-    setForm((prev) => ({ ...prev, phone_country_code: nextCode }));
-    setCountrySearch(match ? match.label : nextCode);
-    if (errors.phone_country_code) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next.phone_country_code;
-        return next;
-      });
-    }
-  }
-
-  const filteredCountryCodes = useMemo(() => {
-    const query = String(countrySearch || "").trim().toLowerCase();
-    if (!query) return COUNTRY_CODE_OPTIONS;
-    return COUNTRY_CODE_OPTIONS.filter((opt) => {
-      const haystack = `${opt.label} ${opt.code}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [countrySearch]);
-
   function validate() {
     const next = {};
     for (const field of REQUIRED_FIELDS) {
       if (!String(form[field] || "").trim()) {
         next[field] = "Required";
       }
-    }
-    if (!COUNTRY_CODE_OPTIONS.some((opt) => opt.code === form.phone_country_code)) {
-      next.phone_country_code = "Select a country or region";
     }
     const normalizedEmail = normalizeEmail(form.email);
     if (normalizedEmail && !isLikelyValidEmail(normalizedEmail)) {
@@ -364,10 +335,6 @@ export default function RegistrationForm() {
       next.phone = "Phone number is too long";
     } else if (phoneDigits && /^(\d)\1+$/.test(phoneDigits)) {
       next.phone = "Enter a valid phone number";
-    }
-    if (!countrySearch.trim()) {
-      const match = COUNTRY_CODE_OPTIONS.find((opt) => opt.code === form.phone_country_code);
-      setCountrySearch(match ? match.label : "");
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -449,15 +416,11 @@ export default function RegistrationForm() {
               <div className="grid sm:grid-cols-2 gap-5">
                 <PhoneField
                   countryCode={form.phone_country_code}
-                  countrySearch={countrySearch}
-                  onCountrySearchChange={setCountrySearch}
-                  onCountryCodeChange={updateCountryCode}
-                  filteredCountryCodes={filteredCountryCodes}
+                  onCountryCodeChange={(v) => updateField("phone_country_code", v)}
                   phoneValue={form.phone}
                   onPhoneChange={(v) => updateField("phone", v)}
                   required
                   error={errors.phone}
-                  countryError={errors.phone_country_code}
                 />
                 <TextField
                   label="Email"
@@ -616,73 +579,37 @@ function TextField({
 
 function PhoneField({
   countryCode,
-  countrySearch,
-  onCountrySearchChange,
   onCountryCodeChange,
-  filteredCountryCodes,
   phoneValue,
   onPhoneChange,
   required,
   error,
-  countryError,
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-
   return (
     <label className="block">
       <span className="block text-sm font-semibold text-slate-700">
         Phone Number (WhatsApp No.) {required && <span className="text-brand-600">*</span>}
       </span>
       <div className="mt-1.5 grid grid-cols-[minmax(0,1.15fr),1fr] gap-2">
-        <div className="relative">
-          <input
-            type="text"
-            value={countrySearch}
-            onChange={(e) => {
-              onCountrySearchChange(e.target.value);
-              setIsOpen(true);
-            }}
-            onFocus={() => setIsOpen(true)}
-            onBlur={() => {
-              setTimeout(() => setIsOpen(false), 120);
-            }}
-            placeholder="Search country / region"
-            className={inputClass(countryError) + " mt-0 px-3 pr-8"}
-            required={required}
-            aria-label="Search country or region"
-          />
-          <button
-            type="button"
-            onClick={() => setIsOpen((open) => !open)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            aria-label="Toggle country list"
-          >
-            ▾
-          </button>
-          {isOpen && filteredCountryCodes.length > 0 && (
-            <div className="absolute z-20 mt-2 w-full max-h-72 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white shadow-lg">
-              {filteredCountryCodes.map((opt) => (
-                <button
-                  key={opt.code + opt.label}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    onCountryCodeChange(opt.code);
-                    onCountrySearchChange(opt.label);
-                    setIsOpen(false);
-                  }}
-                  className={
-                    "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-brand-50 " +
-                    (countryCode === opt.code ? "bg-brand-50 text-brand-700" : "text-slate-700")
-                  }
-                >
-                  <span className="min-w-0 truncate">{opt.label}</span>
-                  <span className="shrink-0 text-xs font-semibold text-slate-400">{opt.code}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <select
+          value={countryCode}
+          onChange={(e) => onCountryCodeChange(e.target.value)}
+          className={inputClass(null) + " mt-0 px-3 appearance-none bg-white pr-10"}
+          required={required}
+          aria-label="Country code"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B44408' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 0.9rem center",
+          }}
+        >
+          {COUNTRY_CODE_OPTIONS.map((opt) => (
+            <option key={opt.code + opt.label} value={opt.code}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
         <input
           type="tel"
           inputMode="numeric"
@@ -700,7 +627,6 @@ function PhoneField({
           Enter at least 10 digits. Country code will be added automatically.
         </span>
       )}
-      {countryError && <span className="mt-1 block text-xs text-red-600">{countryError}</span>}
       {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
     </label>
   );
