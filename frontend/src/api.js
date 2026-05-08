@@ -43,3 +43,40 @@ export async function fetchRegistrations(adminKey) {
   }
   return res.json();
 }
+
+export async function testBot({ message, phone, dryRun }, adminKey) {
+  const res = await fetch(apiUrl("/api/test-bot"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({
+      message,
+      phone: phone || null,
+      dry_run: dryRun !== false,
+    }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    let detail = "Bot test failed.";
+    try {
+      const body = await res.json();
+      if (body?.detail) {
+        detail = Array.isArray(body.detail)
+          ? body.detail.map((d) => d.msg || JSON.stringify(d)).join(", ")
+          : String(body.detail);
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+export function webhookUrl() {
+  return apiUrl("/webhook/whatsapp");
+}

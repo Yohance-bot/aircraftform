@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
 from models import Registration
+from webhook_router import router as webhook_router
+from bot_router import router as bot_router
 
 ADMIN_KEY = os.getenv("ADMIN_KEY", "change-me-before-deploy")
 
@@ -29,6 +31,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(webhook_router)
+app.include_router(bot_router)
 
 
 @app.on_event("startup")

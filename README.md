@@ -118,6 +118,82 @@ get data into a spreadsheet.
 
 ---
 
+## WhatsApp Bot
+
+The backend exposes a WhatsApp Cloud API webhook plus an admin-only
+"bot tester" endpoint. Parents who message the camp's WhatsApp number
+get an interactive menu, FAQ replies, a registration lookup, and (when
+`GROQ_API_KEY` is set) a Groq-powered free-text Q&A grounded in
+[backend/faq_knowledge.txt](backend/faq_knowledge.txt).
+
+### Required env vars (added to `backend/.env`)
+
+```
+PHONE_NUMBER_ID=                 # from Meta → WhatsApp → API Setup
+WHATSAPP_BUSINESS_ACCOUNT_ID=
+ACCESS_TOKEN=                    # Meta access token (long-lived recommended)
+WEBHOOK_VERIFY_TOKEN=letsfly     # any string; you'll paste this into Meta
+GROQ_API_KEY=                    # optional; bot still works for menu/FAQ
+FRONTEND_URL=http://localhost:5173
+CONTACT_NUMBER=+91XXXXXXXXXX     # shown in the "Speak to Us" reply
+```
+
+### Local testing with ngrok
+
+1. Start the backend: `uvicorn main:app --reload --port 8000`.
+2. Install ngrok if you haven't: `brew install ngrok` (or download from
+   <https://ngrok.com/download>).
+3. In another terminal: `ngrok http 8000`. Copy the `https://...ngrok-free.app`
+   URL it prints.
+4. Open the Meta Developer Console → your app → **WhatsApp** →
+   **Configuration** → **Webhooks**.
+5. Set **Callback URL** to `<ngrok_url>/webhook/whatsapp` and
+   **Verify Token** to `letsfly` (must match `WEBHOOK_VERIFY_TOKEN` in
+   `.env`). Click **Verify and Save**.
+6. Subscribe to the **messages** field.
+7. WhatsApp **Hi** to the test number from the API Setup tab.
+8. You should receive the interactive menu within a couple of seconds.
+
+### Verifying it works
+
+- Menu appears after sending **Hi** → list message working.
+- Tap **Check My Registration** → DB query working (the bot looks the
+  parent up by the last 10 digits of their phone number).
+- Tap **Schedule & Timings** → FAQ reply working.
+- Send a free-text question like "What will my child learn?" → Groq RAG
+  working (or you'll get the canned fallback if `GROQ_API_KEY` is
+  unset).
+- Submit the registration form → confirmation WhatsApp arrives a few
+  seconds later (it runs as a FastAPI background task so the form
+  response is never delayed).
+
+### Bot Tester (no WhatsApp required)
+
+The Admin dashboard at `/admin` has a **Bot Tester** tab that exercises
+the dispatcher locally:
+
+- **Simulate (dry run)** — runs the same code path as the webhook but
+  captures every outbound payload and shows the raw JSON in the UI.
+  Useful for QA without spamming a real number.
+- **Send for real** — actually POSTs the messages to the Meta Graph API
+  and delivers them to the phone number you enter.
+
+Special syntax in the message field:
+
+- `list:schedule`, `list:check_registration`, etc. — simulate the user
+  picking a row from the interactive menu.
+- `button:back_to_menu` — simulate the back-to-menu button tap.
+- Anything else is treated as plain text.
+
+### Deploying to Render
+
+When deploying via Render Blueprint, the new env vars in
+[render.yaml](render.yaml) are all `sync: false` — fill them in once
+on the `amc-backend` service page in the Render dashboard. The
+`amc-frontend` service does not need any new vars.
+
+---
+
 ## Project layout
 
 ```
@@ -126,6 +202,12 @@ get data into a spreadsheet.
 │   ├── main.py             FastAPI routes + startup table creation
 │   ├── models.py           SQLAlchemy `Registration` model
 │   ├── database.py         Engine + session, SQLite fallback
+│   ├── whatsapp_client.py  Single async send_whatsapp() with dry-run capture
+│   ├── whatsapp_messages.py All bot copy + senders (menu, FAQ, lookup, etc.)
+│   ├── webhook_router.py   /webhook/whatsapp GET (verify) + POST (dispatch)
+│   ├── bot_router.py       /api/test-bot for the admin Bot Tester tab
+│   ├── groq_agent.py       Groq RAG over faq_knowledge.txt with fallback
+│   ├── faq_knowledge.txt   FAQ corpus used by the RAG prompt
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
