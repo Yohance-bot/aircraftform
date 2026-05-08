@@ -183,7 +183,7 @@ def _build_menu_interactive(registration_context: dict | None) -> dict:
         "type": "list",
         "header": {"type": "text", "text": header_text},
         "body": {"text": body_text},
-        "footer": {"text": "Palm Meadows, Bangalore"},
+        "footer": {"text": "💬 Or just type your question below!"},
         "action": {"button": "View Options", "sections": _MENU_SECTIONS},
     }
 
@@ -364,42 +364,34 @@ async def handle_registration_check(
 # Generic FAQ copy — used when the parent has no registration on file.
 _GENERIC_FAQ: dict[str, str] = {
     "schedule": (
-        "📅 *Camp Schedule*\n\n"
-        "🛩 *Summer Camp* (Ages 10-14)\n"
-        "   📅 20th April – 1st May\n"
-        "   ⏰ 10:00 AM – 12:00 PM\n"
-        "   💰 Rs 11,999/-\n\n"
-        "✈️ *Summer Workshop* (Ages 5-9)\n"
-        "   📅 4th May – 15th May\n"
-        "   ⏰ 10:00 AM – 12:00 PM\n"
-        "   💰 Rs 7,499/-"
+        "📅 *Camp Schedules*\n\n"
+        "🛩 *Ages 10–14* · 20 Apr–1 May · 10AM-12PM · ₹11,999\n"
+        "✈️ *Ages 5–9* · 4–15 May · 10AM-12PM · ₹7,499\n\n"
+        "📍 Palm Meadows · All materials included"
     ),
     "bring": (
         "🎒 *What to Bring*\n\n"
         "✅ Water bottle\n"
         "✅ Comfortable clothes\n"
-        "✅ Lots of enthusiasm!\n\n"
-        "Everything else is provided by us 😊"
+        "✅ Enthusiasm!\n\n"
+        "Everything else is provided 😊"
     ),
     "age": (
         "✈️ *Age & Eligibility*\n\n"
-        "👦 Age: 5 to 14 years\n"
-        "📚 Grade: 1 to 10\n\n"
-        "All skill levels welcome — "
-        "complete beginners to enthusiasts!"
+        "👦 Ages 5–14 · Grades 1–10\n"
+        "All skill levels welcome!"
     ),
     "food": (
         "🍫 *Food & Snacks*\n\n"
-        "✅ Water bottles provided\n"
-        "✅ Small chocolate/snack\n"
+        "✅ Water & small snack provided\n"
         "❌ No full meals\n\n"
         "Please have breakfast before camp!"
     ),
     "location": (
         "📍 *Location*\n\n"
-        "Palm Meadows, Whitefield, Bangalore\n\n"
-        "🏘️ Exclusive for Palm Meadows residents\n"
-        "Parking available within the community"
+        "Palm Meadows, Whitefield, Bangalore\n"
+        "Exclusive for Palm Meadows residents\n"
+        "Parking available within community"
     ),
 }
 
@@ -414,14 +406,7 @@ def _personalised_schedule(registration_context: dict) -> str:
             "✈️ Summer Workshop (Ages 5-9)\n"
             "   📅 4th May - 15th May\n"
             "   ⏰ 10:00 AM - 12:00 PM\n"
-            "   💰 Rs 7,499/- (All materials included!)\n\n"
-            f"*What {child_name} will build:*\n"
-            "📄 Days 1-2: Paper planes & Four Forces\n"
-            "✈️ Days 3-4: Chuck & Balsa Gliders\n"
-            "⚡ Day 5: Team Challenge & Energy\n"
-            "🚁 Days 6-7: Water Rockets & Helicopters\n"
-            "🖥 Days 8-9: Flight Simulation\n"
-            "🏆 Day 10: Showcase & Certificates!"
+            "   💰 Rs 7,499/- (All materials included!)"
         )
 
     return (
@@ -429,14 +414,7 @@ def _personalised_schedule(registration_context: dict) -> str:
         "🛩 Summer Camp (Ages 10-14)\n"
         "   📅 20th April - 1st May\n"
         "   ⏰ 10:00 AM - 12:00 PM\n"
-        "   💰 Rs 11,999/-\n\n"
-        f"*What {child_name} will build:*\n"
-        "📄 Days 1-2: Flying Foundations & Paper Fleet\n"
-        "✈️ Days 3-4: Chuck & Catapult Gliders\n"
-        "🚀 Day 5: Air Stomp Rockets\n"
-        "🚁 Days 6-7: Rubber Helicopters\n"
-        "🖥 Days 8-9: Advanced Build & Simulation\n"
-        "🏆 Day 10: Showcase & Certificates!"
+        "   💰 Rs 11,999/-"
     )
 
 
@@ -551,10 +529,10 @@ async def send_speak_to_us(phone: str) -> None:
     await send_text(
         phone,
         (
-            "🙏 *Speak to Our Team*\n\n"
-            "Our team will reach out to you shortly!\n\n"
-            f"📞 For urgent queries: {contact_number}\n\n"
-            "We're here to help! 😊"
+            "🙏 *Contact Us*\n\n"
+            f"📞 {contact_number}\n"
+            "🌐 www.airmodelcrafts.com\n\n"
+            "We'll get back to you shortly!"
         ),
     )
     await send_back_to_menu_button(phone)

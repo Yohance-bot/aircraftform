@@ -75,7 +75,7 @@ def _extract_message_body(message: dict) -> str:
     """Extract a human-readable body from any message type.
 
     For text messages, returns the text body. For interactive replies,
-    returns a bracketed description like "[menu selection: check_registration]".
+    returns a human readable label like "📋 Checked registration status".
     For other types, returns a bracketed type description.
     """
     try:
@@ -90,11 +90,24 @@ def _extract_message_body(message: dict) -> str:
 
             if interactive_type == "list_reply":
                 selection = (interactive.get("list_reply") or {}).get("id", "unknown")
-                return f"[menu selection: {selection}]"
+                labels = {
+                    "check_registration": "📋 Checked registration status",
+                    "payment_info": "💳 Viewed payment info",
+                    "speak_to_us": "📞 Requested to speak to team",
+                    "schedule": "📅 Viewed schedule",
+                    "what_to_bring": "🎒 Viewed what to bring",
+                    "age_eligibility": "✈️ Viewed age & eligibility",
+                    "food": "🍫 Viewed food info",
+                    "location": "📍 Viewed location",
+                }
+                return labels.get(selection, f"[menu: {selection}]")
 
             if interactive_type == "button_reply":
                 button = (interactive.get("button_reply") or {}).get("id", "unknown")
-                return f"[button tap: {button}]"
+                labels = {
+                    "back_to_menu": "🏠 Returned to main menu",
+                }
+                return labels.get(button, f"[button: {button}]")
 
             return f"[interactive: {interactive_type}]"
 
