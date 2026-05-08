@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
+from conversation_models import Conversation, Message
 from database import get_db
 from groq_agent import groq_rag_answer
 from models import Registration
@@ -62,6 +64,112 @@ _LIST_REPLY_FAQ_TOPIC: dict[str, str] = {
     "food": "food",
     "location": "location",
 }
+
+
+# ---------------------------------------------------------------------------
+# Conversation tracking helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_message_body(message: dict) -> str:
+    """Extract a human-readable body from any message type.
+
+    For text messages, returns the text body. For interactive replies,
+    returns a bracketed description like "[menu selection: check_registration]".
+    For other types, returns a bracketed type description.
+    """
+    try:
+        msg_type = message.get("type", "unknown")
+
+        if msg_type == "text":
+            return (message.get("text") or {}).get("body", "[empty text]")
+
+        if msg_type == "interactive":
+            interactive = message.get("interactive") or {}
+            interactive_type = interactive.get("type", "unknown")
+
+            if interactive_type == "list_reply":
+                selection = (interactive.get("list_reply") or {}).get("id", "unknown")
+                return f"[menu selection: {selection}]"
+
+            if interactive_type == "button_reply":
+                button = (interactive.get("button_reply") or {}).get("id", "unknown")
+                return f"[button tap: {button}]"
+
+            return f"[interactive: {interactive_type}]"
+
+        return f"[{msg_type} message]"
+    except Exception:
+        return "[unknown message]"
+
+
+def _upsert_conversation_and_save_message(
+    phone: str,
+    message_body: str,
+    db: Session,
+) -> tuple[Conversation | None, bool]:
+    """Upsert Conversation row and save inbound Message.
+
+    Returns (conversation, bot_paused). If an error occurs, returns
+    (None, False) so the webhook can continue without crashing.
+
+    If a Registration exists for this phone:
+      - Copies parent_name and child_name to the Conversation
+      - If bucket is new_enquiry, updates it to form_submitted
+    """
+    try:
+        conv = db.query(Conversation).filter(Conversation.phone == phone).first()
+
+        normalized = phone.replace("+", "").strip()
+        if normalized.startswith("91") and len(normalized) == 12:
+            normalized = normalized[2:]
+
+        registration = None
+        if normalized:
+            registration = (
+                db.query(Registration)
+                .filter(Registration.phone.like(f"%{normalized}%"))
+                .order_by(Registration.created_at.desc())
+                .first()
+            )
+
+        if conv is None:
+            conv = Conversation(
+                phone=phone,
+                parent_name=registration.parent_name if registration else None,
+                child_name=registration.child_name if registration else None,
+                bucket="form_submitted" if registration else "new_enquiry",
+                bot_paused=False,
+            )
+            db.add(conv)
+        else:
+            conv.updated_at = datetime.utcnow()
+            if registration:
+                if not conv.parent_name:
+                    conv.parent_name = registration.parent_name
+                if not conv.child_name:
+                    conv.child_name = registration.child_name
+                if conv.bucket == "new_enquiry":
+                    conv.bucket = "form_submitted"
+
+        msg = Message(
+            phone=phone,
+            direction="in",
+            body=message_body,
+            sender="parent",
+        )
+        db.add(msg)
+        db.commit()
+        db.refresh(conv)
+
+        return conv, conv.bot_paused
+    except Exception as exc:
+        logger.exception("Failed to save conversation/message for %s: %s", phone, exc)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None, False
 
 
 def get_registration_context(phone: str, db: Session) -> dict | None:
@@ -226,6 +334,17 @@ async def receive_message(request: Request, db: Session = Depends(get_db)):
         phone = message.get("from")
         if not phone:
             return {"status": "no from"}
+
+        # --- Conversation tracking: upsert + save inbound message ---
+        message_body = _extract_message_body(message)
+        conv, bot_paused = _upsert_conversation_and_save_message(
+            phone, message_body, db
+        )
+
+        # If bot is paused for this conversation, skip dispatch entirely
+        if bot_paused:
+            logger.info("Bot paused for %s, skipping dispatch", phone)
+            return {"status": "ok"}
 
         await _dispatch_message(message, phone, db)
     except Exception as exc:

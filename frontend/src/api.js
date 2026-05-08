@@ -80,3 +80,104 @@ export async function testBot({ message, phone, dryRun }, adminKey) {
 export function webhookUrl() {
   return apiUrl("/webhook/whatsapp");
 }
+
+export async function fetchConversations(adminKey) {
+  const res = await fetch(apiUrl("/api/conversations"), {
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Could not load conversations.");
+  }
+  return res.json();
+}
+
+export async function fetchConversation(adminKey, phone) {
+  const res = await fetch(apiUrl(`/api/conversations/${encodeURIComponent(phone)}`), {
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (res.status === 404) {
+    throw new Error("Conversation not found.");
+  }
+  if (!res.ok) {
+    throw new Error("Could not load conversation.");
+  }
+  return res.json();
+}
+
+export async function sendManualMessage(adminKey, phone, message) {
+  const res = await fetch(apiUrl(`/api/conversations/${encodeURIComponent(phone)}/send`), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ message }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to send message.");
+  }
+  return res.json();
+}
+
+export async function updateBucket(adminKey, phone, bucket) {
+  const res = await fetch(apiUrl(`/api/conversations/${encodeURIComponent(phone)}/bucket`), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ bucket }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to update bucket.");
+  }
+  return res.json();
+}
+
+export async function pauseBot(adminKey, phone, paused) {
+  const res = await fetch(apiUrl(`/api/conversations/${encodeURIComponent(phone)}/pause-bot`), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ paused }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to update bot pause status.");
+  }
+  return res.json();
+}
+
+export async function broadcastMessage(adminKey, message, phones) {
+  const res = await fetch(apiUrl("/api/broadcast"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ message, phones }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Broadcast failed.");
+  }
+  return res.json();
+}

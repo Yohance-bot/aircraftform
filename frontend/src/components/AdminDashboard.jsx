@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { fetchRegistrations } from "../api.js";
+import ConversationsPanel from "./ConversationsPanel.jsx";
 
 // Columns shown in the on-screen table.
 const COLUMNS = [
@@ -41,6 +42,7 @@ export default function AdminDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("registrations");
 
   async function loadData(key) {
     setLoading(true);
@@ -119,87 +121,119 @@ export default function AdminDashboard() {
 
   return (
     <div className="w-full max-w-6xl">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">
-            Registrations
-          </h1>
-          <p className="text-sm text-slate-600">
-            Total: <span className="font-semibold">{rows.length}</span>
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={loading}
-            className="h-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold px-4 text-sm transition-colors"
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={!rows.length}
-            className="h-10 rounded-xl border border-brand-500 bg-white text-brand-600 hover:bg-brand-500 hover:text-white font-semibold px-4 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white disabled:text-brand-300 disabled:border-brand-200 disabled:hover:bg-white disabled:hover:text-brand-300"
-          >
-            Export CSV
-          </button>
-        </div>
+      {/* Tab Bar */}
+      <div className="flex gap-1 mb-5 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab("registrations")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            activeTab === "registrations"
+              ? "border-brand-500 text-brand-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Registrations
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("conversations")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            activeTab === "conversations"
+              ? "border-brand-500 text-brand-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Conversations
+        </button>
       </div>
 
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 mb-4">
-          {error}
-        </div>
-      )}
+      {activeTab === "conversations" ? (
+        <ConversationsPanel adminKey={adminKey} />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <h1 className="text-2xl font-extrabold text-slate-900">
+                Registrations
+              </h1>
+              <p className="text-sm text-slate-600">
+                Total: <span className="font-semibold">{rows.length}</span>
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading}
+                className="h-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold px-4 text-sm transition-colors"
+              >
+                {loading ? "Refreshing..." : "Refresh"}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={!rows.length}
+                className="h-10 rounded-xl border border-brand-500 bg-white text-brand-600 hover:bg-brand-500 hover:text-white font-semibold px-4 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white disabled:text-brand-300 disabled:border-brand-200 disabled:hover:bg-white disabled:hover:text-brand-300"
+              >
+                Export CSV
+              </button>
+            </div>
+          </div>
 
-      <div className="overflow-x-auto rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100">
-        <table className="min-w-full text-sm">
-          <thead className="bg-brand-50 text-brand-800">
-            <tr>
-              {COLUMNS.map((c) => (
-                <th
-                  key={c.key}
-                  className="text-left font-semibold px-4 py-3 whitespace-nowrap"
-                >
-                  {c.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={COLUMNS.length}
-                  className="px-4 py-10 text-center text-slate-500"
-                >
-                  No registrations yet.
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 mb-4">
+              {error}
+            </div>
+          )}
+
+          <div className="overflow-x-auto rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-brand-50 text-brand-800">
+                <tr>
                   {COLUMNS.map((c) => (
-                    <td
+                    <th
                       key={c.key}
-                      className={
-                        "px-4 py-3 text-slate-700 " +
-                        (c.key === "special_requirements"
-                          ? "whitespace-normal min-w-[18rem] max-w-[28rem] align-top"
-                          : "whitespace-nowrap")
-                      }
+                      className="text-left font-semibold px-4 py-3 whitespace-nowrap"
                     >
-                      {formatCell(c.key, r[c.key])}
-                    </td>
+                      {c.label}
+                    </th>
                   ))}
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={COLUMNS.length}
+                      className="px-4 py-10 text-center text-slate-500"
+                    >
+                      No registrations yet.
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((r) => (
+                    <tr key={r.id} className="border-t border-slate-100">
+                      {COLUMNS.map((c) => (
+                        <td
+                          key={c.key}
+                          className={
+                            "px-4 py-3 text-slate-700 " +
+                            (c.key === "special_requirements"
+                              ? "whitespace-normal min-w-[18rem] max-w-[28rem] align-top"
+                              : "whitespace-nowrap")
+                          }
+                        >
+                          {formatCell(c.key, r[c.key])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
