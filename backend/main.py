@@ -13,8 +13,6 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from conversation_models import Base as ConvBase
-from conversations_router import router as conversations_router
 from database import Base, engine, get_db
 from models import Registration
 from webhook_router import router as webhook_router
@@ -36,16 +34,13 @@ app.add_middleware(
 
 app.include_router(webhook_router)
 app.include_router(bot_router)
-app.include_router(conversations_router)
 
 
 @app.on_event("startup")
 def on_startup() -> None:
     """Create tables on startup if they don't already exist."""
     Base.metadata.create_all(bind=engine)
-    ConvBase.metadata.create_all(bind=engine)
     ensure_registration_columns()
-    ensure_conversation_columns()
 
 
 def ensure_registration_columns() -> None:
@@ -57,25 +52,6 @@ def ensure_registration_columns() -> None:
     if "phone_country_code" not in existing_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE registrations ADD COLUMN phone_country_code VARCHAR(10)"))
-
-
-def ensure_conversation_columns() -> None:
-    """Add bot_paused and bucket columns if they don't exist (for existing deployments)."""
-    inspector = inspect(engine)
-    if "conversations" not in inspector.get_table_names():
-        return
-
-    existing_columns = {column["name"] for column in inspector.get_columns("conversations")}
-
-    with engine.begin() as conn:
-        if "bot_paused" not in existing_columns:
-            conn.execute(
-                text("ALTER TABLE conversations ADD COLUMN bot_paused BOOLEAN DEFAULT FALSE")
-            )
-        if "bucket" not in existing_columns:
-            conn.execute(
-                text("ALTER TABLE conversations ADD COLUMN bucket VARCHAR(50) DEFAULT 'new_enquiry'")
-            )
 
 
 class RegistrationIn(BaseModel):

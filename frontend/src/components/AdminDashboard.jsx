@@ -3,6 +3,7 @@ import { useState } from "react";
 import { fetchRegistrations } from "../api.js";
 import BroadcastPanel from "./BroadcastPanel.jsx";
 import ConversationsPanel from "./ConversationsPanel.jsx";
+import KnowledgePanel from "./KnowledgePanel.jsx";
 
 // Columns shown in the on-screen table.
 const COLUMNS = [
@@ -158,12 +159,26 @@ export default function AdminDashboard() {
           <span>📢</span>
           <span>Broadcast</span>
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("knowledge")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-px flex items-center gap-1 ${
+            activeTab === "knowledge"
+              ? "border-brand-500 text-brand-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <span>📋</span>
+          <span>Knowledge</span>
+        </button>
       </div>
 
       {activeTab === "conversations" ? (
         <ConversationsPanel adminKey={adminKey} />
       ) : activeTab === "broadcast" ? (
         <BroadcastPanel adminKey={adminKey} />
+      ) : activeTab === "knowledge" ? (
+        <KnowledgePanel adminKey={adminKey} />
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">

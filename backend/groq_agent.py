@@ -1,9 +1,10 @@
-"""Groq-backed RAG over the camp FAQ, with optional registration personalisation.
+"""Groq-backed RAG over the knowledge base, with optional registration personalisation.
 
-The FAQ corpus is loaded once at module import. Each question is sent to
-Llama 3.3 70B with a tight system prompt that constrains answers to the
-FAQ content. When a registration_context dict is supplied, the bot
-addresses the parent by name and tailors answers to their child's batch.
+The knowledge base is loaded from the database with 60-second caching.
+Each question is sent to Llama 3.3 70B with a tight system prompt that
+constrains answers to the knowledge content. When a registration_context
+dict is supplied, the bot addresses the parent by name and tailors
+answers to their child's batch.
 
 Failure modes are all graceful — if ``GROQ_API_KEY`` is unset, the SDK
 fails to import, or the API errors at runtime, we return the canned
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from pathlib import Path
 
 logger = logging.getLogger("amc.groq")
@@ -26,36 +28,23 @@ AI_DISCLAIMER = (
 )
 
 FALLBACK_ANSWER = (
-    "I'm not 100% sure about that one! 🤔 For accurate information "
-    "please contact our team directly:\n"
-    "📞 9953517691 or 8050312758\n"
-    "They'll be happy to help! 😊"
+    "I'm not sure about that — please contact us on 9953517691 or 8050312758 😊"
 )
 
-SYSTEM_PROMPT = """You are a warm, knowledgeable assistant for AMC Airmodelcrafts — an aeromodelling camp for children at Palm Meadows Resort, Bangalore.
+SYSTEM_PROMPT = """You are a helpful assistant for AMC Airmodelcrafts aeromodelling camp at Palm Meadows Resort, Bangalore.
 
-IMPORTANT: If you have a registered parent's context above, always:
-1. Address the parent by their first name
-2. Refer to their child by name
-3. Answer based on their specific batch/age group
-4. If payment is pending, gently mention it once
+Answer ONLY from the knowledge base provided. Be concise — 2-3 sentences max. No filler phrases like "I hope that helps" or "I'm excited for your child". Just answer the question directly and warmly.
 
-You have two batches:
+Batches:
 - Summer Camp: Ages 10-14, Rs 11,999, 20 Apr-1 May
 - Summer Workshop: Ages 5-9, Rs 7,499, 4-15 May
 
 Rules:
-1. Answer ONLY from the FAQ content provided
-2. Keep answers under 4 sentences
-3. Be warm, friendly and encouraging
-4. End every response with a relevant emoji
-5. Never make up prices, dates or facts
-6. For refunds, complaints or medical needs, always direct to team: 9953517691 / 8050312758
-
-FALLBACK (answer not in FAQ):
-"I'm not 100% sure about that one! 🤔 For accurate information please contact our team directly:
-📞 9953517691 or 8050312758
-They'll be happy to help! 😊"
+1. Answer only from provided knowledge base
+2. 2-3 sentences maximum — no fluff
+3. Never make up prices, dates or facts
+4. For refunds, complaints or medical needs direct to: 9953517691 / 8050312758
+5. If answer not in knowledge base, say: "I'm not sure about that — please contact us on 9953517691 or 8050312758 😊"
 """
 
 UNREGISTERED_BLOCK = """
@@ -63,8 +52,14 @@ UNREGISTERED USER:
 This parent has not registered yet or messaged from a different number. Give general answers covering both batches and encourage them to register.
 """
 
+# Knowledge cache (60 second TTL)
+_knowledge_cache_value: str = ""
+_knowledge_cache_time: float = 0
+_KNOWLEDGE_CACHE_TTL = 60.0
 
-def _load_faq() -> str:
+
+def _load_faq_from_file() -> str:
+    """Fallback: load from faq_knowledge.txt file."""
     path = Path(__file__).with_name("faq_knowledge.txt")
     try:
         return path.read_text(encoding="utf-8")
@@ -73,7 +68,45 @@ def _load_faq() -> str:
         return ""
 
 
-FAQ_CONTENT = _load_faq()
+async def _load_knowledge_from_db() -> str:
+    """Fetch all knowledge entries from DB and combine into one text blob.
+
+    Results are cached for 60 seconds to avoid hitting DB on every message.
+    Falls back to reading faq_knowledge.txt if DB query fails or returns empty.
+    """
+    global _knowledge_cache_value, _knowledge_cache_time
+
+    now = time.time()
+    if _knowledge_cache_value and (now - _knowledge_cache_time) < _KNOWLEDGE_CACHE_TTL:
+        return _knowledge_cache_value
+
+    try:
+        from database import SessionLocal
+        from conversation_models import KnowledgeEntry
+
+        db = SessionLocal()
+        try:
+            entries = (
+                db.query(KnowledgeEntry)
+                .order_by(KnowledgeEntry.created_at.asc())
+                .all()
+            )
+            if entries:
+                text_parts = []
+                for entry in entries:
+                    text_parts.append(f"## {entry.title}\n{entry.content}\n")
+                _knowledge_cache_value = "\n".join(text_parts)
+                _knowledge_cache_time = now
+                return _knowledge_cache_value
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.exception("Failed to load knowledge from DB: %s", exc)
+
+    # Fallback to file
+    _knowledge_cache_value = _load_faq_from_file()
+    _knowledge_cache_time = now
+    return _knowledge_cache_value
 
 
 def _make_client():
@@ -122,7 +155,7 @@ async def groq_rag_answer(
     question: str,
     registration_context: dict | None = None,
 ) -> str:
-    """Answer a free-text question using the FAQ as the only source.
+    """Answer a free-text question using the knowledge base as the only source.
 
     When ``registration_context`` is provided, the bot personalises its
     answer with the parent's first name and child's details. Always
@@ -137,10 +170,11 @@ async def groq_rag_answer(
         return FALLBACK_ANSWER
 
     personalisation_block = _build_personalisation_block(registration_context)
+    knowledge_content = await _load_knowledge_from_db()
 
     user_message = (
         f"{personalisation_block}\n"
-        f"FAQ Content:\n{FAQ_CONTENT}\n\n"
+        f"Knowledge Base:\n{knowledge_content}\n\n"
         f"Parent's question: {question.strip()}"
     )
 

@@ -181,3 +181,72 @@ export async function broadcastMessage(adminKey, message, phones) {
   }
   return res.json();
 }
+
+export async function fetchKnowledge(adminKey) {
+  const res = await fetch(apiUrl("/api/knowledge"), {
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Could not load knowledge entries.");
+  }
+  return res.json();
+}
+
+export async function createKnowledgeEntry(adminKey, title, content) {
+  const res = await fetch(apiUrl("/api/knowledge"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ title, content }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to create knowledge entry.");
+  }
+  return res.json();
+}
+
+export async function updateKnowledgeEntry(adminKey, id, title, content) {
+  const res = await fetch(apiUrl(`/api/knowledge/${id}`), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ title, content }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (res.status === 404) {
+    throw new Error("Knowledge entry not found.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to update knowledge entry.");
+  }
+  return res.json();
+}
+
+export async function deleteKnowledgeEntry(adminKey, id) {
+  const res = await fetch(apiUrl(`/api/knowledge/${id}`), {
+    method: "DELETE",
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (res.status === 404) {
+    throw new Error("Knowledge entry not found.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to delete knowledge entry.");
+  }
+  return res.json();
+}
