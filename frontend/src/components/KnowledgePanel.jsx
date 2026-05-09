@@ -164,66 +164,67 @@ export default function KnowledgePanel({ adminKey }) {
             const isConfirmingDelete = confirmDeleteId === entry.id;
 
             return (
-              <div
-                key={entry.id}
-                className="border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div
-                    className="flex-1 cursor-pointer"
-                    onClick={() => toggleExpand(entry.id)}
-                  >
-                    <h3 className="font-bold text-slate-900">{entry.title}</h3>
-                    <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">
-                      {isExpanded
-                        ? entry.content
-                        : truncateContent(entry.content)}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-2">
-                      Created: {formatDate(entry.created_at)}
-                      {entry.updated_at !== entry.created_at && (
-                        <> · Updated: {formatDate(entry.updated_at)}</>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    {isConfirmingDelete ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(entry.id)}
-                          className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors"
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(entry)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteId(entry.id)}
-                          className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
+              <div key={entry.id}>
+                <div
+                  className="border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div
+                      className="flex-1 cursor-pointer"
+                      onClick={() => toggleExpand(entry.id)}
+                    >
+                      <h3 className="font-bold text-slate-900">{entry.title}</h3>
+                      <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">
+                        {isExpanded
+                          ? entry.content
+                          : truncateContent(entry.content)}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-2">
+                        Created: {formatDate(entry.created_at)}
+                        {entry.updated_at !== entry.created_at && (
+                          <> · Updated: {formatDate(entry.updated_at)}</>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(entry)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(entry.id)}
+                        className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
+                {isConfirmingDelete && (
+                  <div className="mt-2 mx-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+                    <span className="text-sm text-amber-800">Are you sure?</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(entry.id)}
+                        className="px-3 py-1 rounded bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="px-3 py-1 rounded bg-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })
@@ -232,59 +233,64 @@ export default function KnowledgePanel({ adminKey }) {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900">
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={handleCloseModal}
+          />
+          {/* Modal */}
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">
                 {editingEntry ? "Edit Entry" : "New Entry"}
               </h3>
-            </div>
-            <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="e.g. Camp Schedule"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                    placeholder="e.g. Camp Schedule"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Content
+                  </label>
+                  <textarea
+                    value={formContent}
+                    onChange={(e) => setFormContent(e.target.value)}
+                    placeholder="Enter the knowledge content that the bot can use to answer questions..."
+                    className="w-full h-48 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 resize-y"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Content
-                </label>
-                <textarea
-                  value={formContent}
-                  onChange={(e) => setFormContent(e.target.value)}
-                  placeholder="Enter the knowledge content that the bot can use to answer questions..."
-                  rows={12}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
-                />
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving || !formTitle.trim() || !formContent.trim()}
+                  className="px-4 py-2 rounded-lg font-semibold bg-brand-500 text-white hover:bg-brand-600 disabled:bg-brand-300 transition-colors"
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
               </div>
-            </div>
-            <div className="p-6 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                disabled={saving}
-                className="px-4 py-2 rounded-lg font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || !formTitle.trim() || !formContent.trim()}
-                className="px-4 py-2 rounded-lg font-semibold bg-brand-500 text-white hover:bg-brand-600 disabled:bg-brand-300 transition-colors"
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
