@@ -183,9 +183,12 @@ export default function ConversationsPanel({ adminKey }) {
   });
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 overflow-hidden">
+    <div 
+      className="flex rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 overflow-hidden"
+      style={{ width: "100%", height: "calc(100vh - 310px)" }}
+    >
       {/* Left Panel - Conversation List */}
-      <div className="w-80 flex-shrink-0 border-r border-slate-200 flex flex-col">
+      <div className="flex-shrink-0 border-r border-slate-200 flex flex-col" style={{ minWidth: "280px", width: "300px" }}>
         {/* Search & Filter */}
         <div className="p-3 border-b border-slate-200 space-y-2">
           <input

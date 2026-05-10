@@ -186,7 +186,10 @@ export default function BroadcastPanel({ adminKey }) {
   }
 
   return (
-    <div className="rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 overflow-hidden">
+    <div 
+      className="rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100"
+      style={{ width: "100%", height: "calc(100vh - 310px)", overflowY: "auto" }}
+    >
       {/* Message Composer Section */}
       <div className="p-6 border-b border-slate-200">
         <h2 className="text-lg font-bold text-slate-900 mb-4">

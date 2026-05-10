@@ -130,7 +130,10 @@ export default function KnowledgePanel({ adminKey }) {
   }
 
   return (
-    <div className="rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 overflow-hidden">
+    <div 
+      className="rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100"
+      style={{ width: "100%", height: "calc(100vh - 310px)", overflowY: "auto" }}
+    >
       {/* Header */}
       <div className="p-6 border-b border-slate-200 flex items-center justify-between">
         <h2 className="text-xl font-bold text-slate-900">📋 Knowledge Base</h2>
@@ -166,7 +169,8 @@ export default function KnowledgePanel({ adminKey }) {
             return (
               <div key={entry.id}>
                 <div
-                  className="border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
+                  style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "16px" }}
+                  className="hover:border-slate-300 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div
@@ -233,15 +237,30 @@ export default function KnowledgePanel({ adminKey }) {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <>
-          {/* Backdrop */}
+        <div
+          onClick={handleCloseModal}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
           <div
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={handleCloseModal}
-          />
-          {/* Modal */}
-          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-4">
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              borderRadius: "16px",
+              padding: "28px",
+              width: "100%",
+              maxWidth: "560px",
+              margin: "0 16px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.15)"
+            }}
+          >
               <h3 className="text-lg font-bold text-slate-900 mb-4">
                 {editingEntry ? "Edit Entry" : "New Entry"}
               </h3>
@@ -288,9 +307,8 @@ export default function KnowledgePanel({ adminKey }) {
                   {saving ? "Saving..." : "Save"}
                 </button>
               </div>
-            </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

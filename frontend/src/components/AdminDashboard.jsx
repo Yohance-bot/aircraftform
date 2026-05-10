@@ -69,40 +69,48 @@ const SIDEBAR_STYLES = `
     font-family: 'Inter', sans-serif;
   }
 
-  .amc-sidebar { width: 54px; transition: width 0.28s cubic-bezier(.4,0,.2,1); overflow: hidden; }
-  .amc-sidebar { 
+  .amc-sidebar {
+    width: 54px;
     min-width: 54px;
+    transition: width 0.3s ease;
+    overflow: hidden;
+    flex-shrink: 0;
     background: linear-gradient(180deg, #1a3a6b 0%, #0d2247 50%, #071530 100%);
-    transition: width 0.28s cubic-bezier(.4,0,.2,1), min-width 0.28s cubic-bezier(.4,0,.2,1);
     display: flex;
     flex-direction: column;
   }
-  .amc-sidebar:hover { width: 176px; }
-  .amc-sidebar:hover { min-width: 176px; }
-  .amc-sidebar:hover .amc-nav-label { opacity: 1; }
-  .amc-sidebar:hover .amc-brand-name { opacity: 1; }
-  .amc-sidebar:hover .amc-nav-item { padding-left: 14px; justify-content: flex-start; }
-  .amc-sidebar:hover .amc-brand { justify-content: flex-start; padding-left: 14px; }
-  .amc-nav-label {
-    opacity: 0;
-    transition: opacity 0.15s;
-    white-space: nowrap;
+  .amc-sidebar:hover {
+    width: 180px;
+    min-width: 180px;
   }
-  .amc-brand-name {
+  .amc-sidebar .amc-nav-label {
     opacity: 0;
-    transition: opacity 0.15s;
+    max-width: 0;
+    overflow: hidden;
+    transition: opacity 0.2s, max-width 0.2s;
     white-space: nowrap;
+    display: inline-block;
   }
-  .amc-nav-item {
+  .amc-sidebar:hover .amc-nav-label {
+    opacity: 1;
+    max-width: 120px;
+  }
+  .amc-sidebar .amc-nav-item {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 10px 16px;
     color: rgba(255,255,255,0.7);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s, color 0.15s, padding 0.2s, justify-content 0.2s;
     border-radius: 6px;
     margin: 2px 6px;
+    justify-content: center;
+    padding-left: 0;
+  }
+  .amc-sidebar:hover .amc-nav-item {
+    justify-content: flex-start;
+    padding-left: 14px;
   }
   .amc-nav-item:hover {
     background: rgba(255,255,255,0.08);
@@ -111,6 +119,21 @@ const SIDEBAR_STYLES = `
   .amc-nav-item.active {
     background: rgba(245,158,11,0.1);
     color: #f59e0b;
+  }
+  .amc-sidebar .amc-brand-name {
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    transition: opacity 0.2s, max-width 0.2s;
+    white-space: nowrap;
+  }
+  .amc-sidebar:hover .amc-brand-name {
+    opacity: 1;
+    max-width: 120px;
+  }
+  .amc-sidebar:hover .amc-brand {
+    justify-content: flex-start;
+    padding-left: 14px;
   }
   @keyframes cloud-drift { 0%,100%{transform:translateX(0)} 50%{transform:translateX(10px)} }
   @keyframes cloud-drift2 { 0%,100%{transform:translateX(0)} 50%{transform:translateX(-8px)} }
