@@ -314,6 +314,7 @@ export default function AdminDashboard() {
 
   const confirmedCount = rows.filter(r => r.payment_status === "confirmed").length;
   const isFullHeightTab = activeTab === "conversations" || activeTab === "broadcast" || activeTab === "knowledge";
+  const showSkyHeader = activeTab !== "conversations";
 
   return (
     <>
@@ -387,141 +388,143 @@ export default function AdminDashboard() {
         {/* Main Content */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* Sky Header */}
-          <div style={{
-            height: "180px",
-            background: "linear-gradient(135deg, #b8d4f5 0%, #c8e0f8 30%, #d8eaff 60%, #a8c8f0 100%)",
-            position: "relative",
-            overflow: "hidden",
-            flexShrink: 0
-          }}>
-            {/* Drifting clouds */}
-            <div style={{ position: "absolute", left: "5%", top: "20px", zIndex: 2, animation: "cloud-drift 12s ease-in-out infinite" }}>
-              <Cloud width={120} opacity={0.4} />
-            </div>
-            <div style={{ position: "absolute", left: "45%", top: "60px", zIndex: 2, animation: "cloud-drift2 15s ease-in-out infinite" }}>
-              <Cloud width={100} opacity={0.35} />
-            </div>
-            <div style={{ position: "absolute", right: "15%", top: "10px", zIndex: 2, animation: "cloud-drift 18s ease-in-out infinite" }}>
-              <Cloud width={90} opacity={0.3} />
-            </div>
+          {showSkyHeader && (
+            <div style={{
+              height: "180px",
+              background: "linear-gradient(135deg, #b8d4f5 0%, #c8e0f8 30%, #d8eaff 60%, #a8c8f0 100%)",
+              position: "relative",
+              overflow: "hidden",
+              flexShrink: 0
+            }}>
+              {/* Drifting clouds */}
+              <div style={{ position: "absolute", left: "5%", top: "20px", zIndex: 2, animation: "cloud-drift 12s ease-in-out infinite" }}>
+                <Cloud width={120} opacity={0.4} />
+              </div>
+              <div style={{ position: "absolute", left: "45%", top: "60px", zIndex: 2, animation: "cloud-drift2 15s ease-in-out infinite" }}>
+                <Cloud width={100} opacity={0.35} />
+              </div>
+              <div style={{ position: "absolute", right: "15%", top: "10px", zIndex: 2, animation: "cloud-drift 18s ease-in-out infinite" }}>
+                <Cloud width={90} opacity={0.3} />
+              </div>
 
-            {/* Flight paths SVG */}
-            <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 3 }} preserveAspectRatio="none" viewBox="0 0 730 180">
-              <path d="M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70" fill="none" stroke="white" strokeWidth="1.5" strokeOpacity="0.55" strokeDasharray="6 5">
-                <animate attributeName="stroke-dashoffset" from="0" to="-33" dur="2s" repeatCount="indefinite"/>
-              </path>
-              <path d="M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72" fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeOpacity="0.35" strokeDasharray="5 6">
-                <animate attributeName="stroke-dashoffset" from="0" to="-33" dur="2.4s" repeatCount="indefinite"/>
-              </path>
-              <path d="M -10 135 Q 90 75 185 115 Q 270 150 360 90 Q 440 40 540 105 Q 615 140 730 105" fill="none" stroke="white" strokeWidth="1.5" strokeOpacity="0.3" strokeDasharray="4 7">
-                <animate attributeName="stroke-dashoffset" from="0" to="-33" dur="3s" repeatCount="indefinite"/>
-              </path>
-            </svg>
+              {/* Flight paths SVG */}
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 3 }} preserveAspectRatio="none" viewBox="0 0 730 180">
+                <path d="M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70" fill="none" stroke="white" strokeWidth="1.5" strokeOpacity="0.55" strokeDasharray="6 5">
+                  <animate attributeName="stroke-dashoffset" from="0" to="-33" dur="2s" repeatCount="indefinite"/>
+                </path>
+                <path d="M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72" fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeOpacity="0.35" strokeDasharray="5 6">
+                  <animate attributeName="stroke-dashoffset" from="0" to="-33" dur="2.4s" repeatCount="indefinite"/>
+                </path>
+                <path d="M -10 135 Q 90 75 185 115 Q 270 150 360 90 Q 440 40 540 105 Q 615 140 730 105" fill="none" stroke="white" strokeWidth="1.5" strokeOpacity="0.3" strokeDasharray="4 7">
+                  <animate attributeName="stroke-dashoffset" from="0" to="-33" dur="3s" repeatCount="indefinite"/>
+                </path>
+              </svg>
 
-            {/* Planes on paths */}
-            <div style={{
-              position: "absolute",
-              zIndex: 4,
-              offsetPath: "path('M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70')",
-              animation: "fly-path-1 10s linear infinite"
-            }}>
-              <PaperPlane size={22} color="#ffffff" />
-            </div>
-            <div style={{
-              position: "absolute",
-              zIndex: 4,
-              offsetPath: "path('M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72')",
-              animation: "fly-path-2 14s linear infinite",
-              animationDelay: "4s"
-            }}>
-              <PaperPlane size={18} color="#f59e0b" />
-            </div>
-            <div style={{
-              position: "absolute",
-              zIndex: 4,
-              offsetPath: "path('M -10 135 Q 90 75 185 115 Q 270 150 360 90 Q 440 40 540 105 Q 615 140 730 105')",
-              animation: "fly-path-3 18s linear infinite",
-              animationDelay: "8s",
-              opacity: 0.7
-            }}>
-              <PaperPlane size={15} color="#ffffff" />
-            </div>
-            {/* Plane 4: white, 14px, follows path 1 with delay */}
-            <div style={{
-              position: "absolute",
-              zIndex: 4,
-              offsetPath: "path('M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70')",
-              animation: "fly-path-4 11s linear infinite",
-              animationDelay: "5s"
-            }}>
-              <PaperPlane size={14} color="#ffffff" />
-            </div>
-            {/* Plane 5: amber, 20px, new path */}
-            <div style={{
-              position: "absolute",
-              zIndex: 4,
-              offsetPath: "path('M -20 70 Q 100 135 220 70 Q 340 15 480 85 Q 580 130 730 78')",
-              animation: "fly-path-5 16s linear infinite",
-              animationDelay: "2s"
-            }}>
-              <PaperPlane size={20} color="#f59e0b" />
-            </div>
-            {/* Plane 6: white, 16px, follows path 2 */}
-            <div style={{
-              position: "absolute",
-              zIndex: 4,
-              offsetPath: "path('M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72')",
-              animation: "fly-path-6 14s linear infinite",
-              animationDelay: "9s"
-            }}>
-              <PaperPlane size={16} color="#ffffff" />
-            </div>
+              {/* Planes on paths */}
+              <div style={{
+                position: "absolute",
+                zIndex: 4,
+                offsetPath: "path('M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70')",
+                animation: "fly-path-1 10s linear infinite"
+              }}>
+                <PaperPlane size={22} color="#ffffff" />
+              </div>
+              <div style={{
+                position: "absolute",
+                zIndex: 4,
+                offsetPath: "path('M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72')",
+                animation: "fly-path-2 14s linear infinite",
+                animationDelay: "4s"
+              }}>
+                <PaperPlane size={18} color="#f59e0b" />
+              </div>
+              <div style={{
+                position: "absolute",
+                zIndex: 4,
+                offsetPath: "path('M -10 135 Q 90 75 185 115 Q 270 150 360 90 Q 440 40 540 105 Q 615 140 730 105')",
+                animation: "fly-path-3 18s linear infinite",
+                animationDelay: "8s",
+                opacity: 0.7
+              }}>
+                <PaperPlane size={15} color="#ffffff" />
+              </div>
+              {/* Plane 4: white, 14px, follows path 1 with delay */}
+              <div style={{
+                position: "absolute",
+                zIndex: 4,
+                offsetPath: "path('M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70')",
+                animation: "fly-path-4 11s linear infinite",
+                animationDelay: "5s"
+              }}>
+                <PaperPlane size={14} color="#ffffff" />
+              </div>
+              {/* Plane 5: amber, 20px, new path */}
+              <div style={{
+                position: "absolute",
+                zIndex: 4,
+                offsetPath: "path('M -20 70 Q 100 135 220 70 Q 340 15 480 85 Q 580 130 730 78')",
+                animation: "fly-path-5 16s linear infinite",
+                animationDelay: "2s"
+              }}>
+                <PaperPlane size={20} color="#f59e0b" />
+              </div>
+              {/* Plane 6: white, 16px, follows path 2 */}
+              <div style={{
+                position: "absolute",
+                zIndex: 4,
+                offsetPath: "path('M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72')",
+                animation: "fly-path-6 14s linear infinite",
+                animationDelay: "9s"
+              }}>
+                <PaperPlane size={16} color="#ffffff" />
+              </div>
 
-            {/* Big floating plane */}
-            <div style={{
-              position: "absolute",
-              right: "28px",
-              bottom: "8px",
-              zIndex: 4,
-              animation: "float-plane 4s ease-in-out infinite"
-            }}>
-              <PaperPlane size={110} color="#f59e0b" />
-            </div>
+              {/* Big floating plane */}
+              <div style={{
+                position: "absolute",
+                right: "28px",
+                bottom: "8px",
+                zIndex: 4,
+                animation: "float-plane 4s ease-in-out infinite"
+              }}>
+                <PaperPlane size={110} color="#f59e0b" />
+              </div>
 
-            {/* Header text */}
-            <div style={{ position: "absolute", left: "24px", top: "24px", zIndex: 5 }}>
-              <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#0d2247" }}>
-                Control Tower ✈️
-              </h1>
-              <p style={{ margin: "4px 0 0", fontSize: "14px", color: "#3b5998" }}>
-                Ready to inspire young aviators today?
-              </p>
-            </div>
+              {/* Header text */}
+              <div style={{ position: "absolute", left: "24px", top: "24px", zIndex: 5 }}>
+                <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#0d2247" }}>
+                  Control Tower ✈️
+                </h1>
+                <p style={{ margin: "4px 0 0", fontSize: "14px", color: "#3b5998" }}>
+                  Ready to inspire young aviators today?
+                </p>
+              </div>
 
-            {/* Live badge */}
-            <div style={{
-              position: "absolute",
-              right: "24px",
-              top: "24px",
-              zIndex: 5,
-              background: "#fff",
-              borderRadius: "20px",
-              padding: "6px 14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-            }}>
-              <span style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#22c55e",
-                animation: "blink 1.5s ease-in-out infinite"
-              }}/>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}>All systems live</span>
+              {/* Live badge */}
+              <div style={{
+                position: "absolute",
+                right: "24px",
+                top: "24px",
+                zIndex: 5,
+                background: "#fff",
+                borderRadius: "20px",
+                padding: "6px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+              }}>
+                <span style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: "#22c55e",
+                  animation: "blink 1.5s ease-in-out infinite"
+                }}/>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}>All systems live</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {(activeTab === 'dashboard' || activeTab === 'registrations') && (
             <div className="stats-row" style={{
@@ -543,7 +546,7 @@ export default function AdminDashboard() {
           <div className="dashboard-root" style={{
             flex: 1,
             overflow: isFullHeightTab ? "hidden" : "auto",
-            padding: "14px 18px",
+            padding: activeTab === "conversations" ? 0 : "14px 18px",
             display: "flex",
             flexDirection: "column",
             minHeight: 0
