@@ -185,7 +185,7 @@ export default function ConversationsPanel({ adminKey }) {
   return (
     <div 
       className="flex rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 overflow-hidden"
-      style={{ width: "100%", height: "calc(100vh - 310px)" }}
+      style={{ width: "100%", height: "100%", minHeight: 0 }}
     >
       {/* Left Panel - Conversation List */}
       <div className="flex-shrink-0 border-r border-slate-200 flex flex-col" style={{ minWidth: "280px", width: "300px" }}>

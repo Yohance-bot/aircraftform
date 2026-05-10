@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Settings, CheckCircle, Download } from 'lucide-react';
 
-import { fetchRegistrations } from "../api.js";
+import { fetchConversations, fetchRegistrations } from "../api.js";
 import BroadcastPanel from "./BroadcastPanel.jsx";
 import ConversationsPanel from "./ConversationsPanel.jsx";
 import KnowledgePanel from "./KnowledgePanel.jsx";
@@ -78,6 +78,7 @@ const SIDEBAR_STYLES = `
     background: linear-gradient(180deg, #1a3a6b 0%, #0d2247 50%, #071530 100%);
     display: flex;
     flex-direction: column;
+    align-items: stretch;
   }
   .amc-sidebar:hover {
     width: 180px;
@@ -99,14 +100,14 @@ const SIDEBAR_STYLES = `
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 16px;
+    height: 44px;
+    padding: 0;
     color: rgba(255,255,255,0.7);
     cursor: pointer;
     transition: background 0.15s, color 0.15s, padding 0.2s, justify-content 0.2s;
     border-radius: 6px;
     margin: 2px 6px;
     justify-content: center;
-    padding-left: 0;
   }
   .amc-sidebar:hover .amc-nav-item {
     justify-content: flex-start;
@@ -146,7 +147,10 @@ const SIDEBAR_STYLES = `
   @keyframes fly-path-4 { 0%{offset-distance:0%;opacity:0} 5%{opacity:0.9} 95%{opacity:0.9} 100%{offset-distance:100%;opacity:0} }
   @keyframes fly-path-5 { 0%{offset-distance:0%;opacity:0} 5%{opacity:0.85} 95%{opacity:0.85} 100%{offset-distance:100%;opacity:0} }
   @keyframes fly-path-6 { 0%{offset-distance:0%;opacity:0} 5%{opacity:0.9} 95%{opacity:0.9} 100%{offset-distance:100%;opacity:0} }
-  @keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes radar-sweep {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 `;
 
 export default function AdminDashboard() {
@@ -156,6 +160,36 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeConversationCount, setActiveConversationCount] = useState(0);
+
+  useEffect(() => {
+    if (!authed || !adminKey.trim()) {
+      setActiveConversationCount(0);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadConversationCount() {
+      try {
+        const data = await fetchConversations(adminKey.trim());
+        if (!cancelled) {
+          setActiveConversationCount(Array.isArray(data) ? data.length : 0);
+        }
+      } catch {
+        if (!cancelled) {
+          setActiveConversationCount(0);
+        }
+      }
+    }
+
+    loadConversationCount();
+    const interval = setInterval(loadConversationCount, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [authed, adminKey]);
 
   async function loadData(key) {
     setLoading(true);
@@ -279,6 +313,7 @@ export default function AdminDashboard() {
   }
 
   const confirmedCount = rows.filter(r => r.payment_status === "confirmed").length;
+  const isFullHeightTab = activeTab === "conversations" || activeTab === "broadcast" || activeTab === "knowledge";
 
   return (
     <>
@@ -488,36 +523,52 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Stats Bar */}
-          <div style={{
-            display: "flex",
-            gap: "16px",
-            padding: "16px 18px",
-            background: "#fff",
-            borderBottom: "0.5px solid #e2e8f0",
-            flexShrink: 0
-          }}>
-            <StatCard accent="#3b82f6" Icon={Users} value={rows.length} label="Registered" />
-            <StatCard accent="#22c55e" Icon={CheckCircle} value={confirmedCount} label="Confirmed & Paid" />
-            <StatCard accent="#f59e0b" Icon={MessageSquare} value="–" label="Bot Messages" />
-            <StatCard accent="#8b5cf6" Icon={Radio} value="–" label="Needs Follow-up" />
-          </div>
+          {(activeTab === 'dashboard' || activeTab === 'registrations') && (
+            <div className="stats-row" style={{
+              display: "flex",
+              gap: "16px",
+              padding: "16px 18px",
+              background: "#fff",
+              borderBottom: "0.5px solid #e2e8f0",
+              flexShrink: 0
+            }}>
+              <StatCard accent="#3b82f6" Icon={Users} value={rows.length} label="Registered" />
+              <StatCard accent="#22c55e" Icon={CheckCircle} value={confirmedCount} label="Confirmed & Paid" />
+              <StatCard accent="#f59e0b" Icon={MessageSquare} value="–" label="Bot Messages" />
+              <StatCard accent="#8b5cf6" Icon={Radio} value="–" label="Needs Follow-up" />
+            </div>
+          )}
 
           {/* Tab Content */}
-          <div className="dashboard-root" style={{ flex: 1, overflow: "auto", padding: "14px 18px" }}>
+          <div className="dashboard-root" style={{
+            flex: 1,
+            overflow: isFullHeightTab ? "hidden" : "auto",
+            padding: "14px 18px",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0
+          }}>
             {activeTab === "dashboard" ? (
               <DashboardHome
                 rows={rows}
                 confirmedCount={confirmedCount}
                 onViewAll={() => setActiveTab("registrations")}
                 handleExportCsv={handleExportCsv}
+                setActiveTab={setActiveTab}
+                activeConversationCount={activeConversationCount}
               />
             ) : activeTab === "conversations" ? (
-              <ConversationsPanel adminKey={adminKey} />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <ConversationsPanel adminKey={adminKey} />
+              </div>
             ) : activeTab === "broadcast" ? (
-              <BroadcastPanel adminKey={adminKey} />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <BroadcastPanel adminKey={adminKey} />
+              </div>
             ) : activeTab === "knowledge" ? (
-              <KnowledgePanel adminKey={adminKey} />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <KnowledgePanel adminKey={adminKey} />
+              </div>
             ) : (
               <>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
@@ -669,8 +720,14 @@ function relativeTime(dateStr) {
   return `${diffDays}d ago`;
 }
 
-function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv }) {
+function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv, setActiveTab, activeConversationCount }) {
   const recentRows = rows.slice(0, 3);
+  const radarDots = [
+    { top: "27%", left: "61%" },
+    { top: "57%", left: "30%" },
+    { top: "71%", left: "59%" },
+  ];
+  const dotsToShow = Math.min(activeConversationCount || 0, radarDots.length);
 
   return (
     <div style={{ display: "flex", gap: "20px" }}>
@@ -819,22 +876,37 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv }) {
               }} />
               {/* Sweep */}
               <div style={{
-                position: "absolute",
-                inset: 0,
-                borderRadius: "50%",
-                background: "conic-gradient(from 0deg, transparent 300deg, rgba(16,185,129,0.5) 360deg)",
-                transformOrigin: "center",
-                animation: "radar-sweep 2.5s linear infinite"
+                position: 'absolute',
+                top: 0, left: 0, right: 0, bottom: 0,
+                borderRadius: '50%',
+                background: 'conic-gradient(from 0deg, transparent 300deg, rgba(16,185,129,0.5) 360deg)',
+                transformOrigin: '50% 50%',
+                animation: 'radar-sweep 2.5s linear infinite',
+                zIndex: 2
               }} />
               {/* Dots */}
-              <div style={{ position: "absolute", top: "27%", left: "61%", width: "5px", height: "5px", borderRadius: "50%", background: "#10b981" }} />
-              <div style={{ position: "absolute", top: "57%", left: "30%", width: "5px", height: "5px", borderRadius: "50%", background: "#10b981" }} />
-              <div style={{ position: "absolute", top: "71%", left: "59%", width: "5px", height: "5px", borderRadius: "50%", background: "#10b981" }} />
+              {radarDots.slice(0, dotsToShow).map((d, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    position: "absolute",
+                    top: d.top,
+                    left: d.left,
+                    width: "5px",
+                    height: "5px",
+                    borderRadius: "50%",
+                    background: "#10b981",
+                    zIndex: 3,
+                  }}
+                />
+              ))}
             </div>
           </div>
           
           <div style={{ textAlign: "center", fontSize: "11px", color: "#94a3b8" }}>
-            3 active conversations
+            {activeConversationCount === 0
+              ? "No active conversations"
+              : `${activeConversationCount} active conversation${activeConversationCount === 1 ? "" : "s"}`}
           </div>
         </div>
 
@@ -860,7 +932,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv }) {
           {/* Quick Actions Grid */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
             <div 
-              onClick={() => {}}
+              onClick={() => setActiveTab('broadcast')}
               style={{ 
                 background: "#fff", 
                 border: "1px solid #e2e8f0", 
@@ -877,7 +949,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv }) {
               <span style={{ fontSize: "10px", color: "#475569" }}>Broadcast</span>
             </div>
             <div 
-              onClick={() => {}}
+              onClick={() => setActiveTab('knowledge')}
               style={{ 
                 background: "#fff", 
                 border: "1px solid #e2e8f0", 
@@ -894,7 +966,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv }) {
               <span style={{ fontSize: "10px", color: "#475569" }}>Knowledge</span>
             </div>
             <div 
-              onClick={() => {}}
+              onClick={() => setActiveTab('conversations')}
               style={{ 
                 background: "#fff", 
                 border: "1px solid #e2e8f0", 

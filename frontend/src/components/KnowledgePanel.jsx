@@ -123,7 +123,10 @@ export default function KnowledgePanel({ adminKey }) {
 
   if (loading) {
     return (
-      <div className="rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 p-8">
+      <div
+        className="rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 p-8"
+        style={{ width: "100%", height: "100%", minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
         <div className="text-center text-slate-500">Loading knowledge base...</div>
       </div>
     );
@@ -132,7 +135,7 @@ export default function KnowledgePanel({ adminKey }) {
   return (
     <div 
       className="rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100"
-      style={{ width: "100%", height: "calc(100vh - 310px)", overflowY: "auto" }}
+      style={{ width: "100%", height: "100%", minHeight: 0, overflowY: "auto" }}
     >
       {/* Header */}
       <div className="p-6 border-b border-slate-200 flex items-center justify-between">
