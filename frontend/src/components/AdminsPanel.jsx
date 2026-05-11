@@ -130,7 +130,7 @@ export default function AdminsPanel({ adminKey }) {
           How WhatsApp Admin Mode Works
         </div>
         <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", color: "#78350f", lineHeight: 1.6 }}>
-          <li>Add admin phone numbers here (with country code, e.g., 919876543210)</li>
+          <li>Add admin phone numbers here (with country code, e.g., 919876543217)</li>
           <li>When an admin messages the bot, they get agent mode instead of the regular menu</li>
           <li>Admins can ask: "Who needs help?", "Tell me about Priya's issue", "Send Priya: Your refund is processed"</li>
           <li>The AI understands natural language and can query conversations, send messages, and mark issues resolved</li>
