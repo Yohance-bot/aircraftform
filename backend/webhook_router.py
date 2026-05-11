@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from conversation_models import Conversation, Message
 from database import get_db
-from groq_agent import groq_rag_answer
+from groq_agent import FALLBACK_ANSWER, groq_rag_answer
 from models import Registration
 from registration_flow import (
     cancel_flow,
@@ -40,6 +40,27 @@ from whatsapp_messages import (
     send_payment_info,
     send_speak_to_us,
     send_text,
+)
+
+
+logger = logging.getLogger("amc.webhook")
+
+# Message sent when a conversation is escalated to a human rep.
+ESCALATION_MESSAGE = (
+    "Thank you for reaching out. 🙏\n\n"
+    "Your query has been flagged and forwarded to our team. "
+    "A representative will get in touch with you shortly — "
+    "usually within a few hours during working hours.\n\n"
+    "📞 For urgent matters: 9953517691 / 8050312758"
+)
+
+# Message sent when the AI cannot answer a question and escalates automatically.
+AI_ESCALATION_MESSAGE = (
+    "I appreciate your patience. This query falls outside what I'm "
+    "able to assist with at the moment.\n\n"
+    "I've flagged this conversation so a member of our team can follow up "
+    "with you directly — you can expect to hear from us shortly.\n\n"
+    "📞 For immediate assistance: 9953517691 / 8050312758"
 )
 
 
@@ -58,7 +79,18 @@ def _save_bot_message(phone: str, body: str, db: Session) -> None:
         logger.error(f"Failed to save bot message for {phone}: {e}")
         db.rollback()
 
-logger = logging.getLogger("amc.webhook")
+
+def _flag_conversation(phone: str, db: Session) -> None:
+    """Set the conversation bucket to needs_followup."""
+    try:
+        conv = db.query(Conversation).filter(Conversation.phone == phone).first()
+        if conv:
+            conv.bucket = "needs_followup"
+            conv.updated_at = datetime.utcnow()
+            db.commit()
+    except Exception as e:
+        logger.error(f"Failed to flag conversation for {phone}: {e}")
+        db.rollback()
 
 router = APIRouter()
 
@@ -296,9 +328,15 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
             answer = await groq_rag_answer(
                 text, registration_context=registration_context
             )
-            await send_text(phone, answer)
-            _save_bot_message(phone, answer, db)
-            await send_back_to_menu_button(phone)
+            if answer == FALLBACK_ANSWER:
+                # AI couldn't answer — escalate to human and flag
+                _flag_conversation(phone, db)
+                await send_text(phone, AI_ESCALATION_MESSAGE)
+                _save_bot_message(phone, AI_ESCALATION_MESSAGE, db)
+            else:
+                await send_text(phone, answer)
+                _save_bot_message(phone, answer, db)
+                await send_back_to_menu_button(phone)
             return
 
         if msg_type == "interactive":
@@ -323,8 +361,9 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
                     _save_bot_message(phone, "[Sent payment info]", db)
                     return
                 if selection_id == "speak_to_us":
-                    await send_speak_to_us(phone)
-                    _save_bot_message(phone, "[Sent contact info]", db)
+                    _flag_conversation(phone, db)
+                    await send_text(phone, ESCALATION_MESSAGE)
+                    _save_bot_message(phone, ESCALATION_MESSAGE, db)
                     return
 
                 topic = _LIST_REPLY_FAQ_TOPIC.get(selection_id)
