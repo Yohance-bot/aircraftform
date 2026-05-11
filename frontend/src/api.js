@@ -250,3 +250,80 @@ export async function deleteKnowledgeEntry(adminKey, id) {
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Admin User Management
+// ---------------------------------------------------------------------------
+
+export async function fetchAdminUsers(adminKey) {
+  const res = await fetch(apiUrl("/api/admin-users"), {
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Could not load admin users.");
+  }
+  return res.json();
+}
+
+export async function createAdminUser(adminKey, phone, name) {
+  const res = await fetch(apiUrl("/api/admin-users"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ phone, name }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (res.status === 400) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || "An admin with this phone already exists.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to create admin user.");
+  }
+  return res.json();
+}
+
+export async function updateAdminUser(adminKey, id, isActive) {
+  const res = await fetch(apiUrl(`/api/admin-users/${id}`), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (res.status === 404) {
+    throw new Error("Admin user not found.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to update admin user.");
+  }
+  return res.json();
+}
+
+export async function deleteAdminUser(adminKey, id) {
+  const res = await fetch(apiUrl(`/api/admin-users/${id}`), {
+    method: "DELETE",
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (res.status === 404) {
+    throw new Error("Admin user not found.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to delete admin user.");
+  }
+  return res.json();
+}

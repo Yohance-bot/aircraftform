@@ -13,7 +13,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from conversation_models import Base as ConvBase
+from conversation_models import AdminUser, Base as ConvBase  # noqa: F401 — AdminUser ensures table is registered
 from conversations_router import router as conversations_router
 from database import Base, engine, get_db
 from knowledge_router import router as knowledge_router, seed_knowledge_if_empty

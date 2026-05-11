@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from conversation_models import Conversation, Message
+from conversation_models import AdminUser, Conversation, Message
 from database import get_db
 from whatsapp_messages import send_text
 
@@ -398,3 +398,155 @@ async def broadcast_message(
         logger.exception("Failed to commit broadcast messages: %s", exc)
 
     return {"sent": sent, "failed": failed, "results": results}
+
+
+# ---------------------------------------------------------------------------
+# Admin User Management
+# ---------------------------------------------------------------------------
+
+
+class AdminUserOut(BaseModel):
+    id: int
+    phone: str
+    name: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreateAdminUserRequest(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=20)
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class UpdateAdminUserRequest(BaseModel):
+    is_active: bool
+
+
+@router.get(
+    "/api/admin-users",
+    response_model=list[AdminUserOut],
+    dependencies=[Depends(require_admin)],
+)
+def list_admin_users(db: Session = Depends(get_db)) -> list[AdminUser]:
+    """Return all admin users."""
+    try:
+        return db.query(AdminUser).order_by(AdminUser.created_at.desc()).all()
+    except Exception as exc:
+        logger.exception("Error listing admin users: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load admin users.",
+        )
+
+
+@router.post(
+    "/api/admin-users",
+    response_model=AdminUserOut,
+    dependencies=[Depends(require_admin)],
+)
+def create_admin_user(
+    payload: CreateAdminUserRequest,
+    db: Session = Depends(get_db),
+) -> AdminUser:
+    """Create a new admin user."""
+    try:
+        # Normalize phone - strip + and spaces
+        phone = payload.phone.strip().replace("+", "").replace(" ", "").replace("-", "")
+        
+        # Check if already exists
+        existing = db.query(AdminUser).filter(AdminUser.phone == phone).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An admin user with this phone number already exists.",
+            )
+
+        admin = AdminUser(
+            phone=phone,
+            name=payload.name.strip(),
+            is_active=True,
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+
+        return admin
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error creating admin user: %s", exc)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create admin user.",
+        )
+
+
+@router.patch(
+    "/api/admin-users/{admin_id}",
+    response_model=AdminUserOut,
+    dependencies=[Depends(require_admin)],
+)
+def update_admin_user(
+    admin_id: int,
+    payload: UpdateAdminUserRequest,
+    db: Session = Depends(get_db),
+) -> AdminUser:
+    """Update an admin user's active status."""
+    try:
+        admin = db.query(AdminUser).filter(AdminUser.id == admin_id).first()
+        if not admin:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Admin user not found.",
+            )
+
+        admin.is_active = payload.is_active
+        db.commit()
+        db.refresh(admin)
+
+        return admin
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error updating admin user %d: %s", admin_id, exc)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update admin user.",
+        )
+
+
+@router.delete(
+    "/api/admin-users/{admin_id}",
+    dependencies=[Depends(require_admin)],
+)
+def delete_admin_user(
+    admin_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    """Delete an admin user."""
+    try:
+        admin = db.query(AdminUser).filter(AdminUser.id == admin_id).first()
+        if not admin:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Admin user not found.",
+            )
+
+        db.delete(admin)
+        db.commit()
+
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error deleting admin user %d: %s", admin_id, exc)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete admin user.",
+        )

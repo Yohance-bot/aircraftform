@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Settings, CheckCircle, Download } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Shield, Settings, CheckCircle, Download } from 'lucide-react';
 
 import { fetchConversations, fetchRegistrations } from "../api.js";
+import AdminsPanel from "./AdminsPanel.jsx";
 import BroadcastPanel from "./BroadcastPanel.jsx";
 import ConversationsPanel from "./ConversationsPanel.jsx";
 import KnowledgePanel from "./KnowledgePanel.jsx";
@@ -61,6 +62,7 @@ const NAV_ITEMS = [
   { id: "conversations", Icon: MessageSquare, label: "Conversations" },
   { id: "broadcast", Icon: Radio, label: "Broadcast" },
   { id: "knowledge", Icon: BookOpen, label: "Knowledge" },
+  { id: "admins", Icon: Shield, label: "Admins" },
 ];
 
 const SIDEBAR_STYLES = `
@@ -313,7 +315,7 @@ export default function AdminDashboard() {
   }
 
   const confirmedCount = rows.filter(r => r.payment_status === "confirmed").length;
-  const isFullHeightTab = activeTab === "conversations" || activeTab === "broadcast" || activeTab === "knowledge";
+  const isFullHeightTab = activeTab === "conversations" || activeTab === "broadcast" || activeTab === "knowledge" || activeTab === "admins";
   const showSkyHeader = activeTab !== "conversations";
 
   return (
@@ -571,6 +573,10 @@ export default function AdminDashboard() {
             ) : activeTab === "knowledge" ? (
               <div style={{ flex: 1, minHeight: 0 }}>
                 <KnowledgePanel adminKey={adminKey} />
+              </div>
+            ) : activeTab === "admins" ? (
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <AdminsPanel adminKey={adminKey} />
               </div>
             ) : (
               <>

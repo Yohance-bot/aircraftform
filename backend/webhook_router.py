@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
+from admin_agent import handle_admin_message, is_admin_phone
 from conversation_models import Conversation, Message
 from database import get_db
 from groq_agent import FALLBACK_ANSWER, groq_rag_answer
@@ -441,6 +442,22 @@ async def receive_message(request: Request, db: Session = Depends(get_db)):
         # If bot is paused for this conversation, skip dispatch entirely
         if bot_paused:
             logger.info("Bot paused for %s, skipping dispatch", phone)
+            return {"status": "ok"}
+
+        # Check if sender is an admin — route to admin agent
+        if is_admin_phone(phone, db):
+            if message.get("type") == "text":
+                text = (message.get("text") or {}).get("body", "")
+                logger.info("Admin message from %s: %s", phone, text[:50])
+                try:
+                    response = await handle_admin_message(phone, text, db)
+                    await send_text(phone, response)
+                    _save_bot_message(phone, response, db)
+                except Exception as exc:
+                    logger.exception("Admin agent error for %s: %s", phone, exc)
+                    await send_text(phone, "Sorry, something went wrong. Please try again.")
+            else:
+                await send_text(phone, "Please send text messages for admin commands.")
             return {"status": "ok"}
 
         await _dispatch_message(message, phone, db)
