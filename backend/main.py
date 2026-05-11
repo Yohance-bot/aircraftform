@@ -18,6 +18,7 @@ from conversations_router import router as conversations_router
 from database import Base, engine, get_db
 from knowledge_router import router as knowledge_router, seed_knowledge_if_empty
 from models import Registration
+from registration_flow import RegistrationSession  # noqa: F401 — ensures table is registered
 from webhook_router import router as webhook_router
 from bot_router import router as bot_router
 

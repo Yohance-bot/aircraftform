@@ -85,6 +85,11 @@ _MENU_SECTIONS = [
         "title": "Registration & Payment",
         "rows": [
             {
+                "id": "register_child",
+                "title": "📝 Register My Child",
+                "description": "Register via WhatsApp chat",
+            },
+            {
                 "id": "check_registration",
                 "title": "Check My Registration",
                 "description": "View your registration status",
@@ -177,7 +182,11 @@ def _build_menu_interactive(registration_context: dict | None) -> dict:
             )
     else:
         header_text = "🛩 AMC Aeromodelling Camp"
-        body_text = "Welcome! How can I help you today? 😊"
+        body_text = (
+            "Welcome to AMC Aeromodelling Camp! 🛩\n\n"
+            "You can *register your child directly here* or "
+            "visit our form. How can I help?"
+        )
 
     return {
         "type": "list",

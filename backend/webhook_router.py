@@ -27,6 +27,11 @@ from conversation_models import Conversation, Message
 from database import get_db
 from groq_agent import groq_rag_answer
 from models import Registration
+from registration_flow import (
+    cancel_flow,
+    handle_registration_step,
+    start_registration_flow,
+)
 from whatsapp_messages import (
     handle_registration_check,
     send_back_to_menu_button,
@@ -91,6 +96,7 @@ def _extract_message_body(message: dict) -> str:
             if interactive_type == "list_reply":
                 selection = (interactive.get("list_reply") or {}).get("id", "unknown")
                 labels = {
+                    "register_child": "📝 Started registration flow",
                     "check_registration": "📋 Checked registration status",
                     "payment_info": "💳 Viewed payment info",
                     "speak_to_us": "📞 Requested to speak to team",
@@ -250,6 +256,15 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
     # sender below. None means "no registration on file" -> generic copy.
     registration_context = get_registration_context(phone, db)
 
+    # If message is text, check for active registration session first
+    if message.get("type") == "text":
+        text_body = (message.get("text") or {}).get("body", "")
+        # Don't intercept greetings — let them reset to menu
+        if text_body.strip().lower() not in GREETINGS:
+            in_flow = await handle_registration_step(phone, text_body, db)
+            if in_flow:
+                return
+
     try:
         msg_type = message.get("type")
 
@@ -275,6 +290,9 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
             if interactive_type == "list_reply":
                 selection_id = (interactive.get("list_reply") or {}).get("id", "")
 
+                if selection_id == "register_child":
+                    await start_registration_flow(phone, db)
+                    return
                 if selection_id == "check_registration":
                     await handle_registration_check(
                         phone, db, registration_context=registration_context
