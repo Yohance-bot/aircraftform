@@ -15,11 +15,28 @@ from datetime import datetime, timedelta
 from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from conversation_models import Message
 from database import Base
 from models import Registration
 from whatsapp_messages import send_text
 
 logger = logging.getLogger("amc.registration_flow")
+
+
+def _save_bot_message(phone: str, body: str, db: Session) -> None:
+    """Save an outbound bot message to the conversation history."""
+    try:
+        msg = Message(
+            phone=phone,
+            direction="out",
+            body=body,
+            sender="bot",
+        )
+        db.add(msg)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to save bot message for {phone}: {e}")
+        db.rollback()
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 SESSION_EXPIRY_MINUTES = 30
@@ -94,23 +111,28 @@ def _set_session_data(session: RegistrationSession, data: dict) -> None:
     session.data = json.dumps(data)
 
 
-async def _send_error_message(phone: str) -> None:
+async def _send_and_save(phone: str, msg: str, db: Session | None) -> None:
+    """Send a message and save it to the conversation history."""
+    await send_text(phone, msg)
+    if db:
+        _save_bot_message(phone, msg, db)
+
+
+async def _send_error_message(phone: str, db: Session | None = None) -> None:
     """Send a generic error message."""
-    await send_text(
-        phone,
-        f"Something went wrong — please try again or contact us:\n📞 {CONTACT_NUMBERS}",
-    )
+    msg = f"Something went wrong — please try again or contact us:\n📞 {CONTACT_NUMBERS}"
+    await _send_and_save(phone, msg, db)
 
 
-async def _send_expired_message(phone: str) -> None:
+async def _send_expired_message(phone: str, db: Session | None = None) -> None:
     """Send session expired message."""
     msg = "Your registration session expired ⏰\n\nSay Hi to start again"
     if FRONTEND_URL:
         msg += f" or visit:\n{FRONTEND_URL}"
-    await send_text(phone, msg)
+    await _send_and_save(phone, msg, db)
 
 
-async def _send_cancel_message(phone: str) -> None:
+async def _send_cancel_message(phone: str, db: Session | None = None) -> None:
     """Send cancellation confirmation."""
     msg = "No problem! Registration cancelled 😊\n\nYou can register anytime"
     if FRONTEND_URL:
@@ -118,7 +140,7 @@ async def _send_cancel_message(phone: str) -> None:
     else:
         msg += ".\n\n"
     msg += "Or say Hi to start again!"
-    await send_text(phone, msg)
+    await _send_and_save(phone, msg, db)
 
 
 async def start_registration_flow(phone: str, db: Session) -> None:
@@ -151,7 +173,7 @@ async def start_registration_flow(phone: str, db: Session) -> None:
         await _send_error_message(phone)
         return
 
-    await send_text(phone, "What's your child's name? 👦")
+    await _send_and_save(phone, "What's your child's name? 👦", db)
 
 
 async def handle_registration_step(phone: str, text: str, db: Session) -> bool:
@@ -188,7 +210,7 @@ async def handle_registration_step(phone: str, text: str, db: Session) -> bool:
         except Exception as e:
             logger.error(f"Failed to delete expired session for {phone}: {e}")
             db.rollback()
-        await _send_expired_message(phone)
+        await _send_expired_message(phone, db)
         return True
 
     text_lower = text.strip().lower()
@@ -220,10 +242,10 @@ async def handle_registration_step(phone: str, text: str, db: Session) -> bool:
             await _handle_confirm(phone, text, session, data, db)
         else:
             logger.warning(f"Unknown step {current_step} for {phone}")
-            await _send_error_message(phone)
+            await _send_error_message(phone, db)
     except Exception as e:
         logger.error(f"Error handling step {current_step} for {phone}: {e}")
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
 
     return True
 
@@ -241,7 +263,7 @@ async def cancel_flow(phone: str, db: Session) -> None:
         logger.error(f"Failed to cancel flow for {phone}: {e}")
         db.rollback()
 
-    await _send_cancel_message(phone)
+    await _send_cancel_message(phone, db)
 
 
 async def _handle_ask_child_name(
@@ -250,7 +272,7 @@ async def _handle_ask_child_name(
     """Handle child name input."""
     child_name = text.strip()
     if not child_name:
-        await send_text(phone, "Please enter your child's name 👦")
+        await _send_and_save(phone, "Please enter your child's name 👦", db)
         return
 
     data["child_name"] = child_name
@@ -263,13 +285,13 @@ async def _handle_ask_child_name(
     except Exception as e:
         logger.error(f"Failed to save child name for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
-    await _send_age_group_options(phone, child_name)
+    await _send_age_group_options(phone, child_name, db)
 
 
-async def _send_age_group_options(phone: str, child_name: str) -> None:
+async def _send_age_group_options(phone: str, child_name: str, db: Session | None = None) -> None:
     """Send age group selection message."""
     msg = f"""👦 How old is {child_name}?
 
@@ -278,7 +300,7 @@ Reply *1* for Ages 5–9
 
 Reply *2* for Ages 10–14
 🛩 Summer Camp · ₹11,999 · 20 Apr–1 May"""
-    await send_text(phone, msg)
+    await _send_and_save(phone, msg, db)
 
 
 async def _handle_ask_age_group(
@@ -293,7 +315,7 @@ async def _handle_ask_age_group(
         data["age_group"] = "10-14 years"
     else:
         child_name = data.get("child_name", "your child")
-        await _send_age_group_options(phone, child_name)
+        await _send_age_group_options(phone, child_name, db)
         return
 
     _set_session_data(session, data)
@@ -305,11 +327,11 @@ async def _handle_ask_age_group(
     except Exception as e:
         logger.error(f"Failed to save age group for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
     child_name = data.get("child_name", "your child")
-    await send_text(phone, f"What class/grade is {child_name} in? 📚")
+    await _send_and_save(phone, f"What class/grade is {child_name} in? 📚", db)
 
 
 async def _handle_ask_grade(
@@ -319,7 +341,7 @@ async def _handle_ask_grade(
     grade = text.strip()
     if not grade:
         child_name = data.get("child_name", "your child")
-        await send_text(phone, f"What class/grade is {child_name} in? 📚")
+        await _send_and_save(phone, f"What class/grade is {child_name} in? 📚", db)
         return
 
     data["class_grade"] = grade
@@ -332,10 +354,10 @@ async def _handle_ask_grade(
     except Exception as e:
         logger.error(f"Failed to save grade for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
-    await send_text(phone, "What's your villa or flat number at Palm Meadows? 🏠")
+    await _send_and_save(phone, "What's your villa or flat number at Palm Meadows? 🏠", db)
 
 
 async def _handle_ask_villa(
@@ -344,7 +366,7 @@ async def _handle_ask_villa(
     """Handle villa/flat number input."""
     villa = text.strip()
     if not villa:
-        await send_text(phone, "What's your villa or flat number at Palm Meadows? 🏠")
+        await _send_and_save(phone, "What's your villa or flat number at Palm Meadows? 🏠", db)
         return
 
     data["villa_flat_number"] = villa
@@ -357,10 +379,10 @@ async def _handle_ask_villa(
     except Exception as e:
         logger.error(f"Failed to save villa for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
-    await send_text(phone, "Any special requirements? (Reply 'none' if not) 📝")
+    await _send_and_save(phone, "Any special requirements? (Reply 'none' if not) 📝", db)
 
 
 async def _handle_ask_special(
@@ -369,7 +391,7 @@ async def _handle_ask_special(
     """Handle special requirements input."""
     special = text.strip()
     if not special:
-        await send_text(phone, "Any special requirements? (Reply 'none' if not) 📝")
+        await _send_and_save(phone, "Any special requirements? (Reply 'none' if not) 📝", db)
         return
 
     if special.lower() in ("none", "no"):
@@ -386,13 +408,13 @@ async def _handle_ask_special(
     except Exception as e:
         logger.error(f"Failed to save special requirements for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
-    await _send_batch_options(phone)
+    await _send_batch_options(phone, db)
 
 
-async def _send_batch_options(phone: str) -> None:
+async def _send_batch_options(phone: str, db: Session | None = None) -> None:
     """Send batch selection message."""
     msg = """📅 Which batch do you prefer?
 
@@ -402,7 +424,7 @@ Reply *1* for Batch A
 
 Reply *2* for Batch B (if available)
 Or type your preferred dates"""
-    await send_text(phone, msg)
+    await _send_and_save(phone, msg, db)
 
 
 async def _handle_ask_batch(
@@ -411,7 +433,7 @@ async def _handle_ask_batch(
     """Handle batch preference input."""
     choice = text.strip()
     if not choice:
-        await _send_batch_options(phone)
+        await _send_batch_options(phone, db)
         return
 
     if choice == "1":
@@ -430,10 +452,10 @@ async def _handle_ask_batch(
     except Exception as e:
         logger.error(f"Failed to save batch for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
-    await send_text(phone, "And your name, please? 👨")
+    await _send_and_save(phone, "And your name, please? 👨", db)
 
 
 async def _handle_ask_parent_name(
@@ -442,7 +464,7 @@ async def _handle_ask_parent_name(
     """Handle parent name input."""
     parent_name = text.strip()
     if not parent_name:
-        await send_text(phone, "And your name, please? 👨")
+        await _send_and_save(phone, "And your name, please? 👨", db)
         return
 
     data["parent_name"] = parent_name
@@ -455,10 +477,10 @@ async def _handle_ask_parent_name(
     except Exception as e:
         logger.error(f"Failed to save parent name for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
-    await send_text(phone, "What's your email address? 📧")
+    await _send_and_save(phone, "What's your email address? 📧", db)
 
 
 async def _handle_ask_email(
@@ -468,7 +490,7 @@ async def _handle_ask_email(
     email = text.strip()
 
     if not email or "@" not in email or "." not in email:
-        await send_text(phone, "Please enter a valid email address 📧")
+        await _send_and_save(phone, "Please enter a valid email address 📧", db)
         return
 
     data["email"] = email
@@ -481,13 +503,13 @@ async def _handle_ask_email(
     except Exception as e:
         logger.error(f"Failed to save email for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
-    await _send_confirmation_summary(phone, data)
+    await _send_confirmation_summary(phone, data, db)
 
 
-async def _send_confirmation_summary(phone: str, data: dict) -> None:
+async def _send_confirmation_summary(phone: str, data: dict, db: Session | None = None) -> None:
     """Send registration summary for confirmation."""
     child_name = data.get("child_name", "—")
     class_grade = data.get("class_grade", "—")
@@ -511,7 +533,7 @@ async def _send_confirmation_summary(phone: str, data: dict) -> None:
 Reply *YES* to confirm registration
 Reply *NO* to start over
 Reply *CANCEL* to exit"""
-    await send_text(phone, msg)
+    await _send_and_save(phone, msg, db)
 
 
 async def _handle_confirm(
@@ -533,7 +555,7 @@ async def _handle_confirm(
     elif response == "cancel":
         await cancel_flow(phone, db)
     else:
-        await _send_confirmation_summary(phone, data)
+        await _send_confirmation_summary(phone, data, db)
 
 
 async def _complete_registration(
@@ -567,7 +589,7 @@ async def _complete_registration(
     except Exception as e:
         logger.error(f"Failed to create registration for {phone}: {e}")
         db.rollback()
-        await _send_error_message(phone)
+        await _send_error_message(phone, db)
         return
 
     confirmation_msg = f"""🎉 *{child_name} is registered!*
@@ -578,4 +600,4 @@ We'll contact you within 24 hours with payment details.
 📞 Questions? {CONTACT_NUMBERS}
 
 Say *Hi* anytime to check your registration status 😊"""
-    await send_text(phone, confirmation_msg)
+    await _send_and_save(phone, confirmation_msg, db)

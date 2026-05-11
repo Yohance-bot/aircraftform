@@ -9,21 +9,21 @@ import {
 } from "../api.js";
 
 const BUCKET_OPTIONS = [
-  { value: "new_enquiry", label: "New Enquiry" },
-  { value: "form_submitted", label: "Form Submitted" },
-  { value: "payment_confirmed", label: "Payment Confirmed" },
-  { value: "needs_followup", label: "Needs Follow-up" },
-  { value: "not_interested", label: "Not Interested" },
-  { value: "waitlist", label: "Waitlist" },
+  { value: "new_enquiry", label: "New Enquiry", color: "#3b82f6" },
+  { value: "form_submitted", label: "Form Submitted", color: "#f59e0b" },
+  { value: "payment_confirmed", label: "Paid", color: "#22c55e" },
+  { value: "needs_followup", label: "Needs Follow-up", color: "#ef4444" },
+  { value: "not_interested", label: "Not Interested", color: "#6b7280" },
+  { value: "waitlist", label: "Waitlist", color: "#8b5cf6" },
 ];
 
-const BUCKET_COLORS = {
-  new_enquiry: "bg-blue-100 text-blue-700",
-  form_submitted: "bg-amber-100 text-amber-700",
-  payment_confirmed: "bg-green-100 text-green-700",
-  needs_followup: "bg-orange-100 text-orange-700",
-  not_interested: "bg-red-100 text-red-700",
-  waitlist: "bg-purple-100 text-purple-700",
+const BUCKET_STYLES = {
+  new_enquiry: { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
+  form_submitted: { bg: "#fef3c7", text: "#b45309", border: "#fcd34d" },
+  payment_confirmed: { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
+  needs_followup: { bg: "#fee2e2", text: "#dc2626", border: "#fca5a5" },
+  not_interested: { bg: "#f3f4f6", text: "#4b5563", border: "#d1d5db" },
+  waitlist: { bg: "#ede9fe", text: "#7c3aed", border: "#c4b5fd" },
 };
 
 function relativeTime(timestamp) {
@@ -36,10 +36,10 @@ function relativeTime(timestamp) {
   const diffDays = Math.floor(diffMs / 86400000);
 
   if (diffMins < 1) return "now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
   if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 7) return `${diffDays}d`;
   return date.toLocaleDateString();
 }
 
@@ -47,6 +47,26 @@ function formatMessageTime(timestamp) {
   if (!timestamp) return "";
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function getInitials(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function getAvatarColor(name) {
+  const colors = [
+    "#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", 
+    "#10b981", "#06b6d4", "#6366f1", "#f43f5e"
+  ];
+  if (!name) return colors[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
 }
 
 export default function ConversationsPanel({ adminKey }) {
@@ -182,28 +202,96 @@ export default function ConversationsPanel({ adminKey }) {
     return true;
   });
 
+  const needsFollowupCount = conversations.filter(c => c.bucket === "needs_followup").length;
+
   return (
     <div 
-      className="flex rounded-2xl bg-white/95 backdrop-blur shadow-card border border-brand-100 overflow-hidden"
-      style={{ width: "100%", height: "100%", minHeight: 0 }}
+      style={{ 
+        display: "flex", 
+        width: "100%", 
+        height: "100%",
+        background: "#fff",
+        borderRadius: "16px",
+        overflow: "hidden",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.08)"
+      }}
     >
       {/* Left Panel - Conversation List */}
-      <div className="flex-shrink-0 border-r border-slate-200 flex flex-col" style={{ minWidth: "280px", width: "300px" }}>
-        {/* Search & Filter */}
-        <div className="p-3 border-b border-slate-200 space-y-2">
-          <input
-            type="text"
-            placeholder="Search name or phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
-          />
+      <div style={{ 
+        width: "320px", 
+        minWidth: "320px",
+        borderRight: "1px solid #e5e7eb",
+        display: "flex",
+        flexDirection: "column",
+        background: "#fafbfc"
+      }}>
+        {/* Header */}
+        <div style={{ 
+          padding: "16px", 
+          borderBottom: "1px solid #e5e7eb",
+          background: "#fff"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>
+              Messages
+            </h2>
+            {needsFollowupCount > 0 && (
+              <span style={{
+                background: "#fee2e2",
+                color: "#dc2626",
+                fontSize: "12px",
+                fontWeight: 600,
+                padding: "4px 10px",
+                borderRadius: "20px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px"
+              }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#dc2626" }} />
+                {needsFollowupCount} need attention
+              </span>
+            )}
+          </div>
+          
+          {/* Search */}
+          <div style={{ position: "relative", marginBottom: "10px" }}>
+            <svg style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 12px 10px 38px",
+                borderRadius: "10px",
+                border: "1px solid #e5e7eb",
+                fontSize: "14px",
+                outline: "none",
+                background: "#f8fafc",
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+          {/* Filter */}
           <select
             value={bucketFilter}
             onChange={(e) => setBucketFilter(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400"
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: "8px",
+              border: "1px solid #e5e7eb",
+              fontSize: "13px",
+              background: "#fff",
+              cursor: "pointer",
+              color: "#475569"
+            }}
           >
-            <option value="all">All Buckets</option>
+            <option value="all">All Conversations</option>
             {BUCKET_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -213,11 +301,13 @@ export default function ConversationsPanel({ adminKey }) {
         </div>
 
         {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto">
+        <div style={{ flex: 1, overflowY: "auto" }}>
           {loadingList ? (
-            <div className="p-4 text-center text-slate-500 text-sm">Loading...</div>
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "#94a3b8" }}>
+              Loading conversations...
+            </div>
           ) : filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-slate-500 text-sm">
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "#94a3b8" }}>
               No conversations found
             </div>
           ) : (
@@ -234,14 +324,26 @@ export default function ConversationsPanel({ adminKey }) {
       </div>
 
       {/* Right Panel - Chat View */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, background: "#fff" }}>
         {!selectedPhone ? (
-          <div className="flex-1 flex items-center justify-center text-slate-500">
-            Select a conversation
+          <div style={{ 
+            flex: 1, 
+            display: "flex", 
+            flexDirection: "column",
+            alignItems: "center", 
+            justifyContent: "center",
+            color: "#94a3b8",
+            background: "#f8fafc"
+          }}>
+            <svg width="64" height="64" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginBottom: "16px", opacity: 0.5 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p style={{ fontSize: "16px", fontWeight: 500 }}>Select a conversation</p>
+            <p style={{ fontSize: "13px", marginTop: "4px" }}>Choose from the list to start messaging</p>
           </div>
         ) : loadingChat && !selectedConvo ? (
-          <div className="flex-1 flex items-center justify-center text-slate-500">
-            Loading...
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8" }}>
+            Loading conversation...
           </div>
         ) : selectedConvo ? (
           <>
@@ -254,44 +356,149 @@ export default function ConversationsPanel({ adminKey }) {
 
             {/* Bot Paused Banner */}
             {selectedConvo.bot_paused && (
-              <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-amber-800 text-sm font-medium">
-                Bot paused — you are in manual mode
+              <div style={{
+                background: "#fef3c7",
+                borderBottom: "1px solid #fcd34d",
+                padding: "10px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "#92400e"
+              }}>
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                Bot paused — Manual mode active
+              </div>
+            )}
+
+            {/* Needs Followup Banner */}
+            {selectedConvo.bucket === "needs_followup" && (
+              <div style={{
+                background: "#fee2e2",
+                borderBottom: "1px solid #fca5a5",
+                padding: "10px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "#dc2626"
+              }}>
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                This conversation needs your attention — Bot couldn't resolve
               </div>
             )}
 
             {/* Messages */}
             <div
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50"
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "20px",
+                background: "linear-gradient(180deg, #f0f4f8 0%, #e8ecf1 100%)",
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23cbd5e1' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+              }}
             >
-              {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} />
-              ))}
+              {messages.length === 0 ? (
+                <div style={{ textAlign: "center", color: "#94a3b8", padding: "40px", fontSize: "14px" }}>
+                  No messages yet
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {messages.map((msg) => (
+                    <MessageBubble key={msg.id} message={msg} />
+                  ))}
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Quick Actions */}
-            <div className="px-4 py-2 border-t border-slate-200 flex gap-2">
+            <div style={{
+              padding: "10px 16px",
+              borderTop: "1px solid #e5e7eb",
+              display: "flex",
+              gap: "8px",
+              background: "#fafbfc"
+            }}>
               <button
                 type="button"
                 onClick={() => handleBucketChange("payment_confirmed")}
-                className="text-xs px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 font-medium transition-colors"
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #86efac",
+                  background: "#dcfce7",
+                  color: "#15803d",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}
               >
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
                 Mark as Paid
               </button>
               <button
                 type="button"
                 onClick={() => handleBucketChange("needs_followup")}
-                className="text-xs px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 font-medium transition-colors"
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #fca5a5",
+                  background: "#fee2e2",
+                  color: "#dc2626",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}
               >
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+                </svg>
                 Flag Follow-up
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBucketChange("new_enquiry")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  color: "#64748b",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Clear Status
               </button>
             </div>
 
             {/* Input Bar */}
             <form
               onSubmit={handleSendMessage}
-              className="p-3 border-t border-slate-200 flex gap-2"
+              style={{
+                padding: "12px 16px",
+                borderTop: "1px solid #e5e7eb",
+                display: "flex",
+                gap: "10px",
+                background: "#fff"
+              }}
             >
               <input
                 type="text"
@@ -299,14 +506,37 @@ export default function ConversationsPanel({ adminKey }) {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 disabled={sending}
-                className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 disabled:bg-slate-100"
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  borderRadius: "24px",
+                  border: "1px solid #e5e7eb",
+                  fontSize: "14px",
+                  outline: "none",
+                  background: sending ? "#f1f5f9" : "#f8fafc"
+                }}
               />
               <button
                 type="submit"
                 disabled={!newMessage.trim() || sending}
-                className="px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white font-semibold text-sm transition-colors"
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: "24px",
+                  border: "none",
+                  background: !newMessage.trim() || sending ? "#cbd5e1" : "#3b82f6",
+                  color: "#fff",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  cursor: !newMessage.trim() || sending ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}
               >
-                {sending ? "..." : "Send"}
+                <svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                </svg>
+                Send
               </button>
             </form>
           </>
@@ -318,47 +548,102 @@ export default function ConversationsPanel({ adminKey }) {
 
 function ConversationRow({ conversation, selected, onClick }) {
   const c = conversation;
-  const displayName = c.parent_name || c.phone;
-  const bucketColor = BUCKET_COLORS[c.bucket] || "bg-slate-100 text-slate-700";
+  const displayName = c.parent_name || "Unknown";
+  const isNeedsFollowup = c.bucket === "needs_followup";
+  const bucketStyle = BUCKET_STYLES[c.bucket] || BUCKET_STYLES.new_enquiry;
+  const avatarColor = getAvatarColor(displayName);
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-brand-50 transition-colors ${
-        selected ? "bg-brand-50" : ""
-      }`}
+      style={{
+        width: "100%",
+        textAlign: "left",
+        padding: "14px 16px",
+        borderBottom: "1px solid #f1f5f9",
+        background: selected ? "#eff6ff" : isNeedsFollowup ? "#fef2f2" : "#fff",
+        cursor: "pointer",
+        border: "none",
+        borderLeft: isNeedsFollowup ? "3px solid #ef4444" : selected ? "3px solid #3b82f6" : "3px solid transparent",
+        transition: "all 0.15s ease"
+      }}
+      onMouseEnter={(e) => {
+        if (!selected) e.currentTarget.style.background = isNeedsFollowup ? "#fee2e2" : "#f8fafc";
+      }}
+      onMouseLeave={(e) => {
+        if (!selected) e.currentTarget.style.background = isNeedsFollowup ? "#fef2f2" : "#fff";
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-900 truncate">
+      <div style={{ display: "flex", gap: "12px" }}>
+        {/* Avatar */}
+        <div style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "50%",
+          background: avatarColor,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: "15px",
+          flexShrink: 0
+        }}>
+          {getInitials(displayName)}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
+            <span style={{ 
+              fontWeight: 600, 
+              fontSize: "14px",
+              color: isNeedsFollowup ? "#dc2626" : "#1e293b",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }}>
               {displayName}
             </span>
-            {c.unread_count > 0 && (
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500 text-white text-xs font-bold flex items-center justify-center">
-                {c.unread_count > 9 ? "9+" : c.unread_count}
-              </span>
-            )}
+            <span style={{ fontSize: "11px", color: "#94a3b8", flexShrink: 0, marginLeft: "8px" }}>
+              {relativeTime(c.updated_at)}
+            </span>
           </div>
+
           {c.child_name && (
-            <div className="text-xs text-slate-500 truncate">{c.child_name}</div>
-          )}
-          {c.last_message && (
-            <div className="text-sm text-slate-600 truncate mt-0.5">
-              {c.last_message}
+            <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>
+              {c.child_name}
             </div>
           )}
-        </div>
-        <div className="flex-shrink-0 text-right">
-          <div className="text-xs text-slate-400">
-            {relativeTime(c.updated_at)}
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+            <span style={{
+              fontSize: "12px",
+              color: "#64748b",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              flex: 1
+            }}>
+              {c.last_message || "No messages yet"}
+            </span>
+            
+            <span style={{
+              fontSize: "10px",
+              fontWeight: 600,
+              padding: "3px 8px",
+              borderRadius: "12px",
+              background: bucketStyle.bg,
+              color: bucketStyle.text,
+              border: `1px solid ${bucketStyle.border}`,
+              flexShrink: 0,
+              textTransform: "uppercase",
+              letterSpacing: "0.3px"
+            }}>
+              {BUCKET_OPTIONS.find((o) => o.value === c.bucket)?.label || c.bucket}
+            </span>
           </div>
-          <span
-            className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium ${bucketColor}`}
-          >
-            {BUCKET_OPTIONS.find((o) => o.value === c.bucket)?.label || c.bucket}
-          </span>
         </div>
       </div>
     </button>
@@ -367,45 +652,106 @@ function ConversationRow({ conversation, selected, onClick }) {
 
 function ChatHeader({ conversation, onBucketChange, onToggleBotPause }) {
   const c = conversation;
+  const displayName = c.parent_name || "Unknown";
+  const avatarColor = getAvatarColor(displayName);
+  const bucketStyle = BUCKET_STYLES[c.bucket] || BUCKET_STYLES.new_enquiry;
 
   return (
-    <div className="px-4 py-3 border-b border-slate-200 bg-white">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="font-bold text-slate-900 truncate">
-            {c.parent_name || "Unknown"}
+    <div style={{
+      padding: "16px 20px",
+      borderBottom: "1px solid #e5e7eb",
+      background: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        {/* Avatar */}
+        <div style={{
+          width: "48px",
+          height: "48px",
+          borderRadius: "50%",
+          background: avatarColor,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: "17px"
+        }}>
+          {getInitials(displayName)}
+        </div>
+
+        {/* Info */}
+        <div>
+          <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
+            {displayName}
           </h2>
-          <div className="text-sm text-slate-500">
+          <div style={{ fontSize: "13px", color: "#64748b", marginTop: "2px" }}>
             {c.child_name && <span>{c.child_name} · </span>}
             <span>{c.phone}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <select
-            value={c.bucket}
-            onChange={(e) => onBucketChange(e.target.value)}
-            className={`text-xs px-2 py-1 rounded-lg border-0 font-medium focus:outline-none focus:ring-2 focus:ring-brand-300 ${
-              BUCKET_COLORS[c.bucket] || "bg-slate-100 text-slate-700"
-            }`}
-          >
-            {BUCKET_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={onToggleBotPause}
-            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              c.bot_paused
-                ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                : "bg-green-100 text-green-700 hover:bg-green-200"
-            }`}
-          >
-            {c.bot_paused ? "Bot Paused" : "Bot Active"}
-          </button>
-        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Bucket Selector */}
+        <select
+          value={c.bucket}
+          onChange={(e) => onBucketChange(e.target.value)}
+          style={{
+            padding: "8px 12px",
+            borderRadius: "8px",
+            border: `1px solid ${bucketStyle.border}`,
+            background: bucketStyle.bg,
+            color: bucketStyle.text,
+            fontSize: "12px",
+            fontWeight: 600,
+            cursor: "pointer",
+            outline: "none"
+          }}
+        >
+          {BUCKET_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+
+        {/* Bot Toggle */}
+        <button
+          type="button"
+          onClick={onToggleBotPause}
+          style={{
+            padding: "8px 14px",
+            borderRadius: "8px",
+            border: "none",
+            background: c.bot_paused ? "#fef3c7" : "#dcfce7",
+            color: c.bot_paused ? "#92400e" : "#15803d",
+            fontSize: "12px",
+            fontWeight: 600,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px"
+          }}
+        >
+          {c.bot_paused ? (
+            <>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              Bot Paused
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+              </svg>
+              Bot Active
+            </>
+          )}
+        </button>
       </div>
     </div>
   );
@@ -416,41 +762,77 @@ function MessageBubble({ message }) {
   const isBot = message.sender === "bot";
   const isAdmin = message.sender === "admin";
 
-  let bubbleClass = "";
+  let bubbleStyle = {};
   let labelText = "";
+  let labelColor = "";
 
   if (isIncoming) {
-    bubbleClass = "bg-white border border-slate-200 text-slate-800";
+    bubbleStyle = {
+      background: "#fff",
+      color: "#1e293b",
+      borderRadius: "4px 18px 18px 18px",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.08)"
+    };
     labelText = "";
   } else if (isBot) {
-    bubbleClass = "bg-brand-500 text-white";
-    labelText = "Bot";
+    bubbleStyle = {
+      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+      color: "#fff",
+      borderRadius: "18px 4px 18px 18px"
+    };
+    labelText = "🤖 Bot";
+    labelColor = "#3b82f6";
   } else if (isAdmin) {
-    bubbleClass = "bg-green-500 text-white";
-    labelText = "You";
+    bubbleStyle = {
+      background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+      color: "#fff",
+      borderRadius: "18px 4px 18px 18px"
+    };
+    labelText = "👤 You";
+    labelColor = "#10b981";
   } else {
-    bubbleClass = "bg-slate-500 text-white";
-    labelText = "";
+    bubbleStyle = {
+      background: "#6b7280",
+      color: "#fff",
+      borderRadius: "18px 4px 18px 18px"
+    };
+    labelText = "System";
+    labelColor = "#6b7280";
   }
 
   return (
-    <div className={`flex ${isIncoming ? "justify-start" : "justify-end"}`}>
-      <div className={`max-w-[70%] ${isIncoming ? "" : "text-right"}`}>
+    <div style={{ 
+      display: "flex", 
+      justifyContent: isIncoming ? "flex-start" : "flex-end" 
+    }}>
+      <div style={{ maxWidth: "70%" }}>
         {labelText && (
-          <div
-            className={`text-xs mb-0.5 ${
-              isIncoming ? "text-slate-500" : "text-slate-500"
-            }`}
-          >
+          <div style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            color: labelColor,
+            marginBottom: "4px",
+            textAlign: isIncoming ? "left" : "right"
+          }}>
             {labelText}
           </div>
         )}
-        <div
-          className={`inline-block px-3 py-2 rounded-xl text-sm whitespace-pre-wrap break-words ${bubbleClass}`}
-        >
+        <div style={{
+          padding: "10px 14px",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          ...bubbleStyle
+        }}>
           {message.body}
         </div>
-        <div className="text-xs text-slate-400 mt-0.5">
+        <div style={{
+          fontSize: "10px",
+          color: "#94a3b8",
+          marginTop: "4px",
+          textAlign: isIncoming ? "left" : "right"
+        }}>
           {formatMessageTime(message.timestamp)}
         </div>
       </div>

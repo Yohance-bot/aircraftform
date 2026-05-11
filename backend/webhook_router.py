@@ -42,6 +42,22 @@ from whatsapp_messages import (
     send_text,
 )
 
+
+def _save_bot_message(phone: str, body: str, db: Session) -> None:
+    """Save an outbound bot message to the conversation history."""
+    try:
+        msg = Message(
+            phone=phone,
+            direction="out",
+            body=body,
+            sender="bot",
+        )
+        db.add(msg)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to save bot message for {phone}: {e}")
+        db.rollback()
+
 logger = logging.getLogger("amc.webhook")
 
 router = APIRouter()
@@ -274,12 +290,14 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
 
             if normalized in GREETINGS:
                 await send_interactive_menu(phone, registration_context)
+                _save_bot_message(phone, "[Sent main menu]", db)
                 return
 
             answer = await groq_rag_answer(
                 text, registration_context=registration_context
             )
             await send_text(phone, answer)
+            _save_bot_message(phone, answer, db)
             await send_back_to_menu_button(phone)
             return
 
@@ -292,40 +310,49 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
 
                 if selection_id == "register_child":
                     await start_registration_flow(phone, db)
+                    _save_bot_message(phone, "[Started registration flow]", db)
                     return
                 if selection_id == "check_registration":
                     await handle_registration_check(
                         phone, db, registration_context=registration_context
                     )
+                    _save_bot_message(phone, "[Sent registration status]", db)
                     return
                 if selection_id == "payment_info":
                     await send_payment_info(phone, registration_context)
+                    _save_bot_message(phone, "[Sent payment info]", db)
                     return
                 if selection_id == "speak_to_us":
                     await send_speak_to_us(phone)
+                    _save_bot_message(phone, "[Sent contact info]", db)
                     return
 
                 topic = _LIST_REPLY_FAQ_TOPIC.get(selection_id)
                 if topic is not None:
                     await send_faq_answer(phone, topic, registration_context)
+                    _save_bot_message(phone, f"[Sent FAQ: {topic}]", db)
                     return
 
                 logger.warning("Unhandled list_reply id=%r", selection_id)
                 await send_interactive_menu(phone, registration_context)
+                _save_bot_message(phone, "[Sent main menu]", db)
                 return
 
             if interactive_type == "button_reply":
                 button_id = (interactive.get("button_reply") or {}).get("id", "")
                 if button_id == "back_to_menu":
                     await send_interactive_menu(phone, registration_context)
+                    _save_bot_message(phone, "[Sent main menu]", db)
                     return
                 logger.warning("Unhandled button_reply id=%r", button_id)
                 await send_interactive_menu(phone, registration_context)
+                _save_bot_message(phone, "[Sent main menu]", db)
                 return
 
         # Anything else (image, audio, location, etc.) — show the menu so the
         # parent has a clear way forward.
         await send_interactive_menu(phone, registration_context)
+        _save_bot_message(phone, "[Sent main menu]", db)
 
     except Exception as exc:
         logger.exception("Dispatch error for phone=%s: %s", phone, exc)
