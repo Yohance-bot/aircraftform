@@ -184,8 +184,8 @@ def _build_menu_interactive(registration_context: dict | None) -> dict:
         header_text = "🛩 AMC Aeromodelling Camp"
         body_text = (
             "Welcome to AMC Aeromodelling Camp! 🛩\n\n"
-            "You can *register your child directly here* or "
-            "visit our form. How can I help?"
+            "We have camps at *Palm Meadows* and *Prestige White Meadows*.\n\n"
+            "Register your child or ask me anything!"
         )
 
     return {
@@ -374,9 +374,13 @@ async def handle_registration_check(
 _GENERIC_FAQ: dict[str, str] = {
     "schedule": (
         "📅 *Camp Schedules*\n\n"
-        "🛩 *Ages 10–14* · 20 Apr–1 May · 10AM-12PM · ₹11,999\n"
-        "✈️ *Ages 5–9* · 4–15 May · 10AM-12PM · ₹7,499\n\n"
-        "📍 Palm Meadows · All materials included"
+        "*Palm Meadows (10-day camp):*\n"
+        "🛩 Ages 10–14 · 20 Apr–1 May · 10AM-12PM · ₹11,999\n"
+        "✈️ Ages 5–9 · 4–15 May · 10AM-12PM · ₹7,499\n\n"
+        "*Prestige White Meadows (5-day camp):*\n"
+        "🛩 Ages 6–14 · 25-29 May or 1-5 June\n"
+        "⏰ 9-11 AM or 3-5 PM slots\n\n"
+        "📍 All materials included!"
     ),
     "bring": (
         "🎒 *What to Bring*\n\n"
@@ -397,10 +401,13 @@ _GENERIC_FAQ: dict[str, str] = {
         "Please have breakfast before camp!"
     ),
     "location": (
-        "📍 *Location*\n\n"
-        "Palm Meadows, Whitefield, Bangalore\n"
-        "Exclusive for Palm Meadows residents\n"
-        "Parking available within community"
+        "📍 *Our Locations*\n\n"
+        "*Palm Meadows:*\n"
+        "Whitefield, Bangalore\n"
+        "Exclusive for Palm Meadows residents\n\n"
+        "*Prestige White Meadows:*\n"
+        "Whitefield, Bangalore\n"
+        "Exclusive for PWM residents"
     ),
 }
 
@@ -408,14 +415,29 @@ _GENERIC_FAQ: dict[str, str] = {
 def _personalised_schedule(registration_context: dict) -> str:
     child_name = registration_context.get("child_name") or "your child"
     age_group = registration_context.get("age_group")
+    society = registration_context.get("society")
+    timing_slot = registration_context.get("timing_slot")
+    batch = registration_context.get("batch_preference") or "TBD"
 
+    # Prestige White Meadows - 5 day camp
+    if society == "prestige-white-meadows":
+        return (
+            f"📅 *{child_name}'s Schedule*\n\n"
+            "🛩 Prestige White Meadows Camp (5 days)\n"
+            f"   📅 Batch: {batch}\n"
+            f"   ⏰ Timing: {timing_slot or 'TBD'}\n"
+            "   📍 Prestige White Meadows"
+        )
+
+    # Palm Meadows - 10 day camp
     if _is_workshop_age(age_group):
         return (
             f"📅 *{child_name}'s Schedule*\n\n"
             "✈️ Summer Workshop (Ages 5-9)\n"
             "   📅 4th May - 15th May\n"
             "   ⏰ 10:00 AM - 12:00 PM\n"
-            "   💰 Rs 7,499/- (All materials included!)"
+            "   💰 Rs 7,499/- (All materials included!)\n"
+            "   📍 Palm Meadows"
         )
 
     return (
@@ -423,7 +445,8 @@ def _personalised_schedule(registration_context: dict) -> str:
         "🛩 Summer Camp (Ages 10-14)\n"
         "   📅 20th April - 1st May\n"
         "   ⏰ 10:00 AM - 12:00 PM\n"
-        "   💰 Rs 11,999/-"
+        "   💰 Rs 11,999/-\n"
+        "   📍 Palm Meadows"
     )
 
 
@@ -568,13 +591,26 @@ async def send_whatsapp_confirmation(registration: Registration) -> None:
             )
             return
         batch = registration.batch_preference or "TBD"
+        society = getattr(registration, "society", None) or "palm-meadows"
+        timing_slot = getattr(registration, "timing_slot", None)
+
+        # Determine location name
+        if society == "prestige-white-meadows":
+            location = "Prestige White Meadows"
+            timing_info = f"⏰ Timing: {timing_slot}\n" if timing_slot else ""
+        else:
+            location = "Palm Meadows"
+            timing_info = ""
+
         await send_text(
             phone,
             (
                 f"Hi {registration.parent_name}! 🛩✅\n\n"
                 f"We've received *{registration.child_name}'s* "
                 f"registration for AMC Aeromodelling Camp!\n\n"
-                f"📅 Batch: {batch}\n\n"
+                f"📅 Batch: {batch}\n"
+                f"{timing_info}"
+                f"📍 Location: {location}\n\n"
                 "We'll confirm your spot and share payment "
                 "details within 24 hours.\n\n"
                 "Say *Hi* anytime to see our menu or ask any questions! 😊"

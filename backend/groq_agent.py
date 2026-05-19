@@ -31,13 +31,22 @@ FALLBACK_ANSWER = (
     "I'm not sure about that — please contact us on 9953517691 or 8050312758 😊"
 )
 
-SYSTEM_PROMPT = """You are a helpful assistant for AMC Airmodelcrafts aeromodelling camp at Palm Meadows Resort, Bangalore.
+SYSTEM_PROMPT = """You are a helpful assistant for AMC Airmodelcrafts aeromodelling camps in Bangalore.
 
-Answer ONLY from the knowledge base provided. Be concise — 2-3 sentences max. No filler phrases like "I hope that helps" or "I'm excited for your child". Just answer the question directly and warmly.
+We run camps at TWO locations:
 
-Batches:
-- Summer Camp: Ages 10-14, Rs 11,999, 20 Apr-1 May
-- Summer Workshop: Ages 5-9, Rs 7,499, 4-15 May
+**Palm Meadows (10-day camp):**
+- Summer Camp: Ages 10-14, Rs 11,999, 20 Apr-1 May, 10AM-12PM
+- Summer Workshop: Ages 5-9, Rs 7,499, 4-15 May, 10AM-12PM
+
+**Prestige White Meadows (5-day camp):**
+- Ages 6-14, 5-day camp
+- Batches: 25-29 May, 1-5 June
+- Timing slots: 9-11 AM or 3-5 PM
+
+Answer ONLY from the knowledge base provided. Be concise — 2-3 sentences max. No filler phrases. Just answer the question directly and warmly.
+
+IMPORTANT: If the user's context shows their society (palm-meadows or prestige-white-meadows), give them info specific to their camp location. If no society is shown, mention both options.
 
 Rules:
 1. Answer only from provided knowledge base
@@ -134,6 +143,16 @@ def _build_personalisation_block(registration_context: dict | None) -> str:
     class_grade = registration_context.get("class_grade") or "unspecified"
     batch = registration_context.get("batch_preference") or "unspecified"
     payment = registration_context.get("payment_status") or "pending"
+    society = registration_context.get("society") or "unspecified"
+    timing_slot = registration_context.get("timing_slot") or "unspecified"
+
+    # Determine location name
+    if society == "palm-meadows":
+        location = "Palm Meadows (10-day camp)"
+    elif society == "prestige-white-meadows":
+        location = "Prestige White Meadows (5-day camp)"
+    else:
+        location = "unspecified location"
 
     return (
         "\nREGISTERED PARENT CONTEXT (use this to personalise):\n"
@@ -142,11 +161,13 @@ def _build_personalisation_block(registration_context: dict | None) -> str:
         f"- Child age group: {age_group}\n"
         f"- Child grade: {class_grade}\n"
         f"- Registered batch: {batch}\n"
-        f"- Payment status: {payment}\n\n"
-        f"Use the child's name and age group to give specific, relevant answers. "
-        f"For example if they ask about curriculum, tell them specifically what "
-        f"{child_name} will learn based on their batch. If they ask about price, "
-        f"tell them their specific batch price.\n"
+        f"- Payment status: {payment}\n"
+        f"- Society/Location: {location}\n"
+        f"- Timing slot: {timing_slot}\n\n"
+        f"Use the child's name and society to give specific, relevant answers. "
+        f"For example if they ask about schedule, tell them specifically about "
+        f"the {location} schedule. If they ask about price or location, "
+        f"tell them their specific camp details.\n"
         f"Address the parent as {parent_name}.\n"
     )
 

@@ -9,6 +9,7 @@ import KnowledgePanel from "./KnowledgePanel.jsx";
 
 // Columns shown in the on-screen table.
 const COLUMNS = [
+  { key: "society", label: "Society" },
   { key: "parent_name", label: "Parent" },
   { key: "child_name", label: "Child" },
   { key: "phone_country_code", label: "Country Code" },
@@ -16,6 +17,7 @@ const COLUMNS = [
   { key: "email", label: "Email" },
   { key: "age_group", label: "Age Group" },
   { key: "class_grade", label: "Class" },
+  { key: "timing_slot", label: "Timing" },
   { key: "villa_flat_number", label: "Villa" },
   { key: "batch_preference", label: "Batch" },
   { key: "special_requirements", label: "Special Requirements" },
@@ -26,6 +28,7 @@ const COLUMNS = [
 // CSV export has its own explicit column order & labels (per spec).
 const CSV_COLUMNS = [
   { key: "id", label: "ID" },
+  { key: "society", label: "Society" },
   { key: "parent_name", label: "Parent Name" },
   { key: "child_name", label: "Child Name" },
   { key: "phone_country_code", label: "Country Code" },
@@ -33,6 +36,7 @@ const CSV_COLUMNS = [
   { key: "email", label: "Email" },
   { key: "age_group", label: "Age Group" },
   { key: "class_grade", label: "Class/Grade" },
+  { key: "timing_slot", label: "Timing Slot" },
   { key: "villa_flat_number", label: "Villa/Flat Number" },
   { key: "batch_preference", label: "Batch Preference" },
   { key: "special_requirements", label: "Special Requirements" },
@@ -1055,6 +1059,23 @@ function formatCell(key, value) {
       return String(value);
     }
   }
+  if (key === "society") {
+    const isPalm = value === "palm-meadows";
+    const isPrestige = value === "prestige-white-meadows";
+    const color = isPalm
+      ? "bg-orange-100 text-orange-700"
+      : isPrestige
+      ? "bg-slate-200 text-slate-700"
+      : "bg-gray-100 text-gray-600";
+    const label = isPalm ? "Palm Meadows" : isPrestige ? "Prestige WM" : value;
+    return (
+      <span
+        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${color}`}
+      >
+        {label}
+      </span>
+    );
+  }
   if (key === "payment_status") {
     const color =
       value === "confirmed"
@@ -1068,9 +1089,9 @@ function formatCell(key, value) {
       </span>
     );
   }
-    if (key === "special_requirements") {
-      return String(value);
-    }
+  if (key === "special_requirements") {
+    return String(value);
+  }
   return String(value);
 }
 

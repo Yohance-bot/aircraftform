@@ -187,7 +187,7 @@ export default function PrestigeWhiteMeadowsForm() {
         ) : submitStatus === "celebrating" ? (
           <CelebratingCard />
         ) : (
-          <div className="rounded-2xl bg-white/90 backdrop-blur shadow-card border border-brand-100 p-6 sm:p-8">
+          <div className="rounded-2xl bg-white/90 backdrop-blur shadow-card border border-slate-200 p-6 sm:p-8">
             <Badges />
 
             <form className="mt-6 space-y-5" onSubmit={handleSubmit} noValidate>
@@ -265,7 +265,7 @@ export default function PrestigeWhiteMeadowsForm() {
               <button
                 type="submit"
                 disabled={submitStatus === "submitting"}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 disabled:bg-brand-300 disabled:cursor-not-allowed text-white font-semibold text-base py-3.5 shadow-card transition-colors"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-700 hover:bg-slate-800 active:bg-slate-900 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-semibold text-base py-3.5 shadow-card transition-colors"
               >
                 {submitStatus === "submitting" ? (
                   <>
@@ -292,8 +292,13 @@ export default function PrestigeWhiteMeadowsForm() {
 function Header() {
   return (
     <div className="text-center mb-6">
-      <div className="inline-flex items-center gap-2 text-brand-700 font-semibold tracking-wide text-xs uppercase">
-        <span className="inline-block h-2 w-2 rounded-full bg-brand-500 animate-bob" />
+      <img
+        src="/prestigewhite.jpg"
+        alt="Prestige White Meadows"
+        className="mx-auto mb-4 h-auto w-40 sm:w-44 rounded-lg"
+      />
+      <div className="inline-flex items-center gap-2 text-slate-600 font-semibold tracking-wide text-xs uppercase">
+        <span className="inline-block h-2 w-2 rounded-full bg-slate-500 animate-bob" />
         Prestige White Meadows Aeromodelling Club
       </div>
       <h1 className="mt-2 text-3xl sm:text-4xl font-extrabold text-slate-900">
@@ -310,10 +315,10 @@ function Header() {
 function Badges() {
   return (
     <div className="flex flex-wrap gap-2">
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100 px-3 py-1 text-xs font-semibold">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 text-xs font-semibold">
         🛩 5-DAY CAMP · 2 HOURS/DAY
       </span>
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1 text-xs font-semibold">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 px-3 py-1 text-xs font-semibold">
         📍 Prestige White Meadows · Limited Spots per Batch
       </span>
     </div>
@@ -324,7 +329,7 @@ function TextField({ label, required, value, onChange, placeholder, type = "text
   return (
     <label className="block">
       <span className="block text-sm font-semibold text-slate-700">
-        {label} {required && <span className="text-brand-600">*</span>}
+        {label} {required && <span className="text-slate-500">*</span>}
       </span>
       <input
         type={type}
@@ -346,7 +351,7 @@ function PhoneField({ countryCode, onCountryCodeChange, phoneValue, onPhoneChang
   return (
     <label className="block">
       <span className="block text-sm font-semibold text-slate-700">
-        Phone Number (WhatsApp No.) {required && <span className="text-brand-600">*</span>}
+        Phone Number (WhatsApp No.) {required && <span className="text-slate-500">*</span>}
       </span>
       <div className="mt-1.5 grid grid-cols-[minmax(0,1.15fr),1fr] gap-2">
         <select
@@ -357,7 +362,7 @@ function PhoneField({ countryCode, onCountryCodeChange, phoneValue, onPhoneChang
           aria-label="Country code"
           style={{
             backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B44408' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
             backgroundRepeat: "no-repeat",
             backgroundPosition: "right 0.9rem center",
           }}
@@ -394,7 +399,7 @@ function SelectField({ label, required, value, onChange, options, placeholder, e
   return (
     <label className="block">
       <span className="block text-sm font-semibold text-slate-700">
-        {label} {required && <span className="text-brand-600">*</span>}
+        {label} {required && <span className="text-slate-500">*</span>}
       </span>
       <select
         value={value}
@@ -403,7 +408,7 @@ function SelectField({ label, required, value, onChange, options, placeholder, e
         required={required}
         style={{
           backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B44408' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "right 0.9rem center",
         }}
@@ -424,8 +429,8 @@ function SelectField({ label, required, value, onChange, options, placeholder, e
 
 function inputClass(error) {
   return (
-    "mt-1.5 w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 " +
-    (error ? "border-red-400" : "border-slate-200 hover:border-brand-200")
+    "mt-1.5 w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400 " +
+    (error ? "border-red-400" : "border-slate-200 hover:border-slate-300")
   );
 }
 
@@ -458,7 +463,7 @@ function Spinner() {
 
 function CelebratingCard() {
   return (
-    <div className="rounded-2xl bg-white/80 backdrop-blur shadow-card border border-brand-100 p-10 text-center">
+    <div className="rounded-2xl bg-white/80 backdrop-blur shadow-card border border-slate-200 p-10 text-center">
       <div className="text-4xl">🛫</div>
       <h2 className="mt-3 text-xl font-bold text-slate-900">Lift-off!</h2>
       <p className="mt-2 text-slate-600 text-sm">Filing your registration…</p>
@@ -482,7 +487,7 @@ function SuccessCard({ onReset }) {
       <button
         type="button"
         onClick={onReset}
-        className="mt-6 inline-flex items-center justify-center rounded-xl border border-brand-200 text-brand-700 hover:bg-brand-50 font-semibold px-5 py-2.5 text-sm"
+        className="mt-6 inline-flex items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold px-5 py-2.5 text-sm"
       >
         Register another child
       </button>

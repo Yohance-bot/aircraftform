@@ -289,6 +289,8 @@ def get_registration_context(phone: str, db: Session) -> dict | None:
         "payment_status": reg.payment_status,
         "villa_flat": reg.villa_flat_number,
         "special_requirements": reg.special_requirements,
+        "society": reg.society,
+        "timing_slot": reg.timing_slot,
         "siblings": len(registrations) > 1,
         "sibling_count": len(registrations) - 1,
         "all_children": [r.child_name for r in registrations],
