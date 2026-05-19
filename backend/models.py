@@ -18,7 +18,7 @@ class Registration(Base):
     child_name: Mapped[str] = mapped_column(String(200), nullable=False)
     phone_country_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     phone: Mapped[str] = mapped_column(String(50), nullable=False)
-    email: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(200), nullable=True)
     age_group: Mapped[str] = mapped_column(String(50), nullable=False)
     class_grade: Mapped[str] = mapped_column(String(50), nullable=False)
     villa_flat_number: Mapped[str | None] = mapped_column(String(100), nullable=True)

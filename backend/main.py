@@ -87,6 +87,11 @@ def ensure_registration_columns() -> None:
             conn.execute(text("ALTER TABLE registrations ADD COLUMN society VARCHAR(100)"))
         if "timing_slot" not in existing_columns:
             conn.execute(text("ALTER TABLE registrations ADD COLUMN timing_slot VARCHAR(50)"))
+        # Make email nullable for prestige form (PostgreSQL only)
+        try:
+            conn.execute(text("ALTER TABLE registrations ALTER COLUMN email DROP NOT NULL"))
+        except Exception:
+            pass  # SQLite doesn't support this, but that's okay
 
 
 class RegistrationIn(BaseModel):
@@ -106,6 +111,7 @@ class PrestigeRegistrationIn(BaseModel):
     parent_name: str = Field(..., min_length=1, max_length=200)
     child_name: str = Field(..., min_length=1, max_length=200)
     phone: str = Field(..., min_length=1, max_length=50)
+    email: str | None = Field(default=None, max_length=200)
     timing_slot: str = Field(..., min_length=1, max_length=50)
     age_group: AgeGroup
     class_grade: str = Field(..., min_length=1, max_length=50)
@@ -220,12 +226,17 @@ def register_pwm(payload: PrestigeRegistrationIn, db: Session = Depends(get_db))
             detail="Select a valid timing slot.",
         )
 
+    # Normalize optional email
+    normalized_email = None
+    if payload.email and payload.email.strip():
+        normalized_email = payload.email.strip().lower()
+
     record = Registration(
         parent_name=payload.parent_name.strip(),
         child_name=payload.child_name.strip(),
         phone_country_code=None,
         phone=normalized_phone,
-        email="",
+        email=normalized_email,
         age_group=payload.age_group,
         class_grade=payload.class_grade.strip(),
         timing_slot=payload.timing_slot,

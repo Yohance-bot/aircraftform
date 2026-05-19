@@ -66,13 +66,14 @@ const REQUIRED_FIELDS = [
   "class_grade",
 ];
 
-const ALL_FIELDS = [...REQUIRED_FIELDS, "batch_preference"];
+const ALL_FIELDS = [...REQUIRED_FIELDS, "batch_preference", "email"];
 
 const initialState = {
   parent_name: "",
   child_name: "",
   phone_country_code: "+91",
   phone: "",
+  email: "",
   timing_slot: "",
   age_group: "",
   class_grade: "",
@@ -145,6 +146,7 @@ export default function PrestigeWhiteMeadowsForm() {
         parent_name: form.parent_name.trim(),
         child_name: form.child_name.trim(),
         phone: `${form.phone_country_code}${phoneDigits}`,
+        email: form.email.trim() || null,
         timing_slot: form.timing_slot,
         age_group: form.age_group,
         class_grade: form.class_grade,
@@ -178,6 +180,7 @@ export default function PrestigeWhiteMeadowsForm() {
           submitStatus === "success" || submitStatus === "celebrating" ? 1 : progress
         }
         celebrationKey={celebrationKey}
+        theme="grey"
       />
 
       <div className="w-full max-w-[600px]">
@@ -215,6 +218,15 @@ export default function PrestigeWhiteMeadowsForm() {
                 onPhoneChange={(v) => updateField("phone", v)}
                 required
                 error={errors.phone}
+              />
+
+              <TextField
+                label="Email Address"
+                type="email"
+                value={form.email}
+                onChange={(v) => updateField("email", v)}
+                placeholder="e.g. priya@example.com (optional)"
+                error={errors.email}
               />
 
               <SelectField

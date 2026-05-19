@@ -10,11 +10,12 @@ import { useMemo } from "react";
  *   celebrationKey number — bumped by the parent to trigger a one-shot
  *                           "celebration" plane on successful submission.
  *                           Each new key value mounts a fresh animation.
+ *   theme          "orange" | "grey" — color scheme for the planes and runway.
  *
  * All keyframes + per-element tuning live in the <style> block below so
  * the whole effect is self-contained in one file.
  */
-export default function PlaneSky({ progress = 0, celebrationKey = 0 }) {
+export default function PlaneSky({ progress = 0, celebrationKey = 0, theme = "orange" }) {
   const p = Math.max(0, Math.min(1, progress));
 
   // Plane count: 1 at p=0, 2 from ~33% fill, 3 from ~66% fill.
@@ -26,25 +27,31 @@ export default function PlaneSky({ progress = 0, celebrationKey = 0 }) {
   // Stable small jitter per mount so planes never feel synced.
   const jitter = useMemo(() => [0.12, 0.47, 0.83], []);
 
+  // Theme-based colors
+  const isGrey = theme === "grey";
+  const planeColors = isGrey
+    ? ["#64748b", "#475569"]  // slate-500, slate-600
+    : ["#F97316", "#FB8A3C"]; // orange shades
+  const bgGradient = isGrey
+    ? "radial-gradient(1200px 500px at 85% -10%, rgba(148,163,184,0.45), transparent 60%), radial-gradient(900px 500px at -10% 10%, rgba(100,116,139,0.30), transparent 60%)"
+    : "radial-gradient(1200px 500px at 85% -10%, rgba(253,186,116,0.55), transparent 60%), radial-gradient(900px 500px at -10% 10%, rgba(251,191,128,0.35), transparent 60%)";
+
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
     >
-      <PlaneSkyStyles />
+      <PlaneSkyStyles theme={theme} />
 
       {/* Sunrise wash */}
       <div
         className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(1200px 500px at 85% -10%, rgba(253,186,116,0.55), transparent 60%), radial-gradient(900px 500px at -10% 10%, rgba(251,191,128,0.35), transparent 60%)",
-        }}
+        style={{ background: bgGradient }}
       />
 
       {/* Clouds */}
       {CLOUDS.map((c, i) => (
-        <Cloud key={i} {...c} />
+        <Cloud key={i} {...c} theme={theme} />
       ))}
 
       {/* Active fleet */}
@@ -60,18 +67,18 @@ export default function PlaneSky({ progress = 0, celebrationKey = 0 }) {
             duration={baseDuration}
             delay={delay}
             scale={slot.scale}
-            color={i % 2 === 0 ? "#F97316" : "#FB8A3C"}
+            color={planeColors[i % 2]}
           />
         );
       })}
 
       {/* One-shot celebration plane */}
       {celebrationKey > 0 && (
-        <CelebrationPlane key={`celeb-${celebrationKey}`} />
+        <CelebrationPlane key={`celeb-${celebrationKey}`} theme={theme} />
       )}
 
       {/* Runway with progressive tick lights + pulsing fill */}
-      <Runway progress={p} />
+      <Runway progress={p} theme={theme} />
     </div>
   );
 }
@@ -126,7 +133,9 @@ const PLANE_SLOTS = [
 /*  Subcomponents                                                      */
 /* ------------------------------------------------------------------ */
 
-function Cloud({ top, scale, opacity, dur, startOffset, bobAmp, bobPer, bobDelay }) {
+function Cloud({ top, scale, opacity, dur, startOffset, bobAmp, bobPer, bobDelay, theme = "orange" }) {
+  const isGrey = theme === "grey";
+  const shadowColor = isGrey ? "rgba(71, 85, 105, 0.08)" : "rgba(180, 68, 8, 0.08)";
   return (
     <div
       className="absolute left-0"
@@ -136,7 +145,7 @@ function Cloud({ top, scale, opacity, dur, startOffset, bobAmp, bobPer, bobDelay
         width: 200 * scale,
         animation: `cloud-drift ${dur}s linear infinite`,
         animationDelay: `-${(startOffset * dur).toFixed(2)}s`,
-        filter: "drop-shadow(0 8px 10px rgba(180, 68, 8, 0.08))",
+        filter: `drop-shadow(0 8px 10px ${shadowColor})`,
         willChange: "transform",
       }}
     >
@@ -186,7 +195,12 @@ function PaperPlane({ slot, duration, delay, scale = 1, color = "#F97316" }) {
   );
 }
 
-function CelebrationPlane() {
+function CelebrationPlane({ theme = "orange" }) {
+  const isGrey = theme === "grey";
+  const planeColor = isGrey ? "#475569" : "#F97316";
+  const glowFilter = isGrey
+    ? "drop-shadow(0 0 18px rgba(71, 85, 105, 0.75)) drop-shadow(0 0 36px rgba(71, 85, 105, 0.35))"
+    : "drop-shadow(0 0 18px rgba(249, 115, 22, 0.75)) drop-shadow(0 0 36px rgba(249, 115, 22, 0.35))";
   return (
     <div
       className="absolute left-0 top-0"
@@ -199,23 +213,25 @@ function CelebrationPlane() {
         style={{
           animation: "plane-wobble 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite",
           ["--wobble-amp"]: "6px",
-          filter:
-            "drop-shadow(0 0 18px rgba(249, 115, 22, 0.75)) drop-shadow(0 0 36px rgba(249, 115, 22, 0.35))",
+          filter: glowFilter,
         }}
       >
-        <PlaneSvg color="#F97316" scale={1.3} />
+        <PlaneSvg color={planeColor} scale={1.3} />
       </div>
     </div>
   );
 }
 
 function PlaneSvg({ color = "#F97316", scale = 1 }) {
+  // Determine shadow color based on plane color (orange vs grey)
+  const isGreyPlane = color.startsWith("#4") || color.startsWith("#6");
+  const shadowColor = isGreyPlane ? "rgba(71, 85, 105, 0.25)" : "rgba(180, 68, 8, 0.25)";
   return (
     <svg
       width={64 * scale}
       height={64 * scale}
       viewBox="0 0 64 64"
-      style={{ display: "block", filter: "drop-shadow(0 6px 8px rgba(180, 68, 8, 0.25))" }}
+      style={{ display: "block", filter: `drop-shadow(0 6px 8px ${shadowColor})` }}
     >
       <g
         stroke={color}
@@ -237,9 +253,18 @@ function PlaneSvg({ color = "#F97316", scale = 1 }) {
   );
 }
 
-function Runway({ progress }) {
+function Runway({ progress, theme = "orange" }) {
   const TICKS = 24;
   const litCount = Math.round(progress * TICKS);
+  const isGrey = theme === "grey";
+
+  // Theme-based colors
+  const dashColor = isGrey ? "rgba(71, 85, 105, 0.35)" : "rgba(180, 68, 8, 0.35)";
+  const fillBg = isGrey ? "#64748b" : undefined; // slate-500 for grey, bg-brand-500 for orange
+  const litColor = isGrey ? "rgba(100, 116, 139, 0.95)" : "rgba(249, 115, 22, 0.95)";
+  const unlitColor = isGrey ? "rgba(71, 85, 105, 0.20)" : "rgba(180, 68, 8, 0.20)";
+  const litGlow = isGrey ? "0 0 6px rgba(100, 116, 139, 0.7)" : "0 0 6px rgba(249, 115, 22, 0.7)";
+
   return (
     <div className="absolute bottom-16 left-0 right-0 px-8">
       <div className="relative h-[14px]">
@@ -247,20 +272,20 @@ function Runway({ progress }) {
         <div
           className="absolute inset-x-0 top-[6px] h-[2px] opacity-60"
           style={{
-            backgroundImage:
-              "linear-gradient(to right, rgba(180, 68, 8, 0.35) 0 12px, transparent 12px 28px)",
+            backgroundImage: `linear-gradient(to right, ${dashColor} 0 12px, transparent 12px 28px)`,
             backgroundSize: "28px 2px",
             backgroundRepeat: "repeat-x",
           }}
         />
 
-        {/* Progressive orange fill with a subtle pulse. */}
+        {/* Progressive fill with a subtle pulse. */}
         <div
-          className="absolute top-[5px] left-0 h-[4px] rounded-full bg-brand-500"
+          className={`absolute top-[5px] left-0 h-[4px] rounded-full ${isGrey ? "" : "bg-brand-500"}`}
           style={{
             width: `${progress * 100}%`,
             transition: "width 700ms cubic-bezier(0.22, 0.61, 0.36, 1)",
             animation: "runway-pulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+            ...(isGrey && { backgroundColor: fillBg }),
           }}
         />
 
@@ -275,10 +300,8 @@ function Runway({ progress }) {
                 key={i}
                 className="block w-[2px] h-[10px] rounded-full"
                 style={{
-                  background: lit
-                    ? "rgba(249, 115, 22, 0.95)"
-                    : "rgba(180, 68, 8, 0.20)",
-                  boxShadow: lit ? "0 0 6px rgba(249, 115, 22, 0.7)" : "none",
+                  background: lit ? litColor : unlitColor,
+                  boxShadow: lit ? litGlow : "none",
                   transition:
                     "background-color 400ms cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 400ms cubic-bezier(0.22, 0.61, 0.36, 1)",
                 }}
@@ -295,7 +318,8 @@ function Runway({ progress }) {
 /*  Keyframes                                                          */
 /* ------------------------------------------------------------------ */
 
-function PlaneSkyStyles() {
+function PlaneSkyStyles({ theme = "orange" }) {
+  void theme; // theme passed for consistency but not used in keyframes
   return (
     <style>{`
       @keyframes cloud-drift {
