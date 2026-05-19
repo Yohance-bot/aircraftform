@@ -8,6 +8,29 @@ export function apiUrl(path) {
   return `${API_BASE}${p}`;
 }
 
+export async function submitPrestigeRegistration(data) {
+  const res = await fetch(apiUrl("/api/register-pwm"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    let detail = "Something went wrong. Please try again.";
+    try {
+      const body = await res.json();
+      if (body?.detail) {
+        detail = Array.isArray(body.detail)
+          ? body.detail.map((d) => d.msg || JSON.stringify(d)).join(", ")
+          : String(body.detail);
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
 export async function submitRegistration(data) {
   const res = await fetch(apiUrl("/api/register"), {
     method: "POST",

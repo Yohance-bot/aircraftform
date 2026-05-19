@@ -2,8 +2,9 @@ import { Routes, Route, Link } from "react-router-dom";
 
 import RegistrationForm from "./components/RegistrationForm.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
+import PrestigeWhiteMeadowsForm from "./components/PrestigeWhiteMeadowsForm.jsx";
 
-function Shell({ children }) {
+function Shell({ children, societyName = "Palm Meadows Aeromodelling Camp" }) {
   return (
     <div className="min-h-full flex flex-col">
       <main className="flex-1 flex flex-col items-center px-4 py-8 sm:py-12">
@@ -12,7 +13,7 @@ function Shell({ children }) {
       <footer className="text-center text-xs text-slate-500 py-6">
         <Link to="/" className="hover:text-brand-600">Home</Link>
         <span className="mx-2">·</span>
-        <span>Palm Meadows Aeromodelling Camp</span>
+        <span>{societyName}</span>
         <span className="mx-2">·</span>
         <a
           href="https://www.airmodelcrafts.com/"
@@ -43,6 +44,14 @@ export default function App() {
         element={
           <Shell>
             <AdminDashboard />
+          </Shell>
+        }
+      />
+      <Route
+        path="/prestige-white-meadows"
+        element={
+          <Shell societyName="Prestige White Meadows Aeromodelling Camp">
+            <PrestigeWhiteMeadowsForm />
           </Shell>
         }
       />

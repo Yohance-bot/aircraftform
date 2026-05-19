@@ -80,9 +80,13 @@ def ensure_registration_columns() -> None:
         return
 
     existing_columns = {column["name"] for column in inspector.get_columns("registrations")}
-    if "phone_country_code" not in existing_columns:
-        with engine.begin() as conn:
+    with engine.begin() as conn:
+        if "phone_country_code" not in existing_columns:
             conn.execute(text("ALTER TABLE registrations ADD COLUMN phone_country_code VARCHAR(10)"))
+        if "society" not in existing_columns:
+            conn.execute(text("ALTER TABLE registrations ADD COLUMN society VARCHAR(100)"))
+        if "timing_slot" not in existing_columns:
+            conn.execute(text("ALTER TABLE registrations ADD COLUMN timing_slot VARCHAR(50)"))
 
 
 class RegistrationIn(BaseModel):
@@ -98,18 +102,31 @@ class RegistrationIn(BaseModel):
     batch_preference: str | None = Field(default=None, max_length=100)
 
 
+class PrestigeRegistrationIn(BaseModel):
+    parent_name: str = Field(..., min_length=1, max_length=200)
+    child_name: str = Field(..., min_length=1, max_length=200)
+    phone: str = Field(..., min_length=1, max_length=50)
+    timing_slot: str = Field(..., min_length=1, max_length=50)
+    age_group: AgeGroup
+    class_grade: str = Field(..., min_length=1, max_length=50)
+    batch_preference: str | None = Field(default=None, max_length=100)
+    society: str = Field(default="prestige-white-meadows", max_length=100)
+
+
 class RegistrationOut(BaseModel):
     id: int
     parent_name: str
     child_name: str
     phone_country_code: str | None
     phone: str
-    email: str
+    email: str | None
     age_group: str
     class_grade: str
     villa_flat_number: str | None
     special_requirements: str | None
     batch_preference: str | None
+    timing_slot: str | None
+    society: str | None
     payment_status: str
     created_at: datetime
 
@@ -174,6 +191,7 @@ def register(payload: RegistrationIn, db: Session = Depends(get_db)) -> Register
         villa_flat_number=(payload.villa_flat_number or "").strip() or None,
         special_requirements=(payload.special_requirements or "").strip() or None,
         batch_preference=(payload.batch_preference or "").strip() or None,
+        society="palm-meadows",
         payment_status="pending",
     )
     db.add(record)
@@ -182,6 +200,45 @@ def register(payload: RegistrationIn, db: Session = Depends(get_db)) -> Register
     return RegisterResponse(
         success=True,
         message="Registration received. We'll reach out within 24 hours.",
+        id=record.id,
+    )
+
+
+@app.post("/api/register-pwm", response_model=RegisterResponse)
+def register_pwm(payload: PrestigeRegistrationIn, db: Session = Depends(get_db)) -> RegisterResponse:
+    normalized_phone = re.sub(r"\s+", "", payload.phone.strip())
+    if not re.fullmatch(r"\+\d{10,15}", normalized_phone):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Phone number must include country code and 10 to 15 digits.",
+        )
+
+    valid_timing_slots = {"9-11 AM", "3-5 PM"}
+    if payload.timing_slot not in valid_timing_slots:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Select a valid timing slot.",
+        )
+
+    record = Registration(
+        parent_name=payload.parent_name.strip(),
+        child_name=payload.child_name.strip(),
+        phone_country_code=None,
+        phone=normalized_phone,
+        email="",
+        age_group=payload.age_group,
+        class_grade=payload.class_grade.strip(),
+        timing_slot=payload.timing_slot,
+        batch_preference=(payload.batch_preference or "").strip() or None,
+        society=payload.society,
+        payment_status="pending",
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return RegisterResponse(
+        success=True,
+        message="Registration received! We'll be in touch soon.",
         id=record.id,
     )
 

@@ -24,6 +24,8 @@ class Registration(Base):
     villa_flat_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     special_requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
     batch_preference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    timing_slot: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    society: Mapped[str | None] = mapped_column(String(100), nullable=True)
     payment_status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
