@@ -5,7 +5,7 @@ import PlaneSky from "./PlaneSky.jsx";
 
 const AGE_GROUPS = ["6-9 years", "10-14 years"];
 const GRADES = Array.from({ length: 10 }, (_, i) => `Grade ${i + 1}`);
-const BATCHES = ["25-29 May", "1-5 June"];
+const BATCHES = ["June 20-21"];
 const TIMING_SLOTS = ["9-11 AM", "3-5 PM"];
 
 const COUNTRY_CODES = [
