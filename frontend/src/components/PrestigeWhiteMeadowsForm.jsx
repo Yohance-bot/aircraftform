@@ -6,7 +6,7 @@ import PlaneSky from "./PlaneSky.jsx";
 const AGE_GROUPS = ["6-9 years", "10-14 years"];
 const GRADES = Array.from({ length: 10 }, (_, i) => `Grade ${i + 1}`);
 const BATCHES = ["20-21 June"];
-const TIMING_SLOTS = ["9-11 AM", "3-5 PM"];
+const TIMING_SLOTS = ["10 AM - 12 PM"];
 
 const COUNTRY_CODES = [
   { code: "+91", label: "India (+91)" },
@@ -317,7 +317,7 @@ function Header() {
         Summer Camp Registration
       </h1>
       <p className="mt-2 text-slate-600 text-sm sm:text-base max-w-md mx-auto">
-        Five days of building, flying, and a whole lot of fun for young pilots.
+        Two days of building, flying, and a whole lot of fun for young pilots.
         Reserve your child's spot below.
       </p>
     </div>
@@ -328,7 +328,7 @@ function Badges() {
   return (
     <div className="flex flex-wrap gap-2">
       <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 text-xs font-semibold">
-        🛩 5-DAY CAMP · 2 HOURS/DAY
+        🛩 2-DAY CAMP · 2 HOURS/DAY
       </span>
       <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 px-3 py-1 text-xs font-semibold">
         📍 Prestige White Meadows · Limited Spots per Batch
