@@ -25,6 +25,7 @@ from bot_router import router as bot_router
 ADMIN_KEY = os.getenv("ADMIN_KEY", "change-me-before-deploy")
 
 AgeGroup = Literal["6-9 years", "10-14 years"]
+PWM_VALID_TIMING_SLOTS = {"10 AM - 12 PM"}
 
 app = FastAPI(title="AMC Registration API", version="1.0.0")
 
@@ -219,14 +220,12 @@ def register_pwm(payload: PrestigeRegistrationIn, db: Session = Depends(get_db))
             detail="Phone number must include country code and 10 to 15 digits.",
         )
 
-    valid_timing_slots = {"9-11 AM", "3-5 PM"}
-    if payload.timing_slot not in valid_timing_slots:
+    if payload.timing_slot not in PWM_VALID_TIMING_SLOTS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Select a valid timing slot.",
         )
 
-    # Normalize optional email
     normalized_email = None
     if payload.email and payload.email.strip():
         normalized_email = payload.email.strip().lower()
