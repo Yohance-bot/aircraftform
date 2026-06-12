@@ -531,7 +531,7 @@
       #brand small { display: none; }
       /* Shorter scroll track; element fills width so wingspan nests in runway. */
       #track { height: 300vh; }
-      .plane-inner { --plane-w: clamp(280px, 116vw, 620px); }
+      .plane-inner { --plane-w: clamp(400px, 165vw, 900px); }
     }
     @media (max-width: 460px) {
       .hangar-grid { grid-template-columns: 1fr; }
@@ -897,9 +897,10 @@
 
       // ---- FLIGHT TUNABLES (mirror of the CSS / plane2-3.png geometry) ----
       var VPy = 0.60;   // vanishing-point / horizon Y (fraction of viewport H)
-      var Y1  = 0.70;   // resting anchor Y — tyres seat here (measured from target)
+      var isMobile = window.innerWidth < 720;
+      var Y1  = isMobile ? 0.72 : 0.70;   // resting anchor Y — tyres seat here (measured from target)
       var S0  = 0.05;   // start scale — a tiny dot in the sunrise at the horizon
-      var S1  = 0.62;   // RESTING scale — wings nested in the runway (closer looks bad)
+      var S1  = isMobile ? 0.88 : 0.62;   // RESTING scale — wings nested in the runway (closer looks bad)
       var CONTACT = 0.72; // tyre contact line as fraction of element height (measured)
       var PT  = 0.60;   // PLANE TOUCHDOWN: landing completes here, then it FREEZES
       var TD  = PT;     // touchdown threshold (smoke burst + wheel spin blur)
