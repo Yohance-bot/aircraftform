@@ -537,6 +537,24 @@
       .hangar-grid { grid-template-columns: 1fr; }
       .foot-grid { grid-template-columns: 1fr; }
     }
+    @media (max-width: 768px) {
+      .panel--hero h1 { font-size: clamp(28px, 7vw, 76px); }
+      .panel--hero .lede { font-size: clamp(14px, 2vw, 19px); }
+    }
+    @media (max-width: 560px) {
+      .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .scroll-hint { display: none; }
+      .panel--hero { top: 6vh; }
+      .panel { width: min(96vw, var(--maxw)); }
+      .path { padding: 13px 13px; }
+      .path-ttl { font-size: 15px; }
+      .svc { padding: 20px 18px; }
+      .intake { padding: 18px 14px; }
+      .site-footer { padding: 40px 0 24px; }
+    }
+    @media (max-width: 400px) {
+      #brand span:last-child { display: none; }
+    }
 
     /* Drifting clouds cross the viewport horizontally. */
     @keyframes cloud-cross {
