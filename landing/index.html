@@ -531,7 +531,12 @@
       #brand small { display: none; }
       /* Shorter scroll track; element fills width so wingspan nests in runway. */
       #track { height: 300vh; }
-      .plane-inner { --plane-w: clamp(400px, 165vw, 900px); }
+      .plane-inner {
+        --plane-w: clamp(400px, 165vw, 900px);
+        left: 50%;
+        margin-left: calc(var(--plane-w) / -2);
+        margin-right: 0;
+      }
     }
     @media (max-width: 460px) {
       .hangar-grid { grid-template-columns: 1fr; }
@@ -955,6 +960,7 @@
 
         var H = function () { return window.innerHeight; };
         var W = function () { return window.innerWidth; };
+        var planeX = function () { return isMobile ? -0.08 * W() : 0; };
         // Pixel offset of the contact point from the element's top.
         var contactPx = function () { return wrap.offsetHeight * CONTACT; };
         // Convert a target anchor (fraction of viewport H) to a translateY in px.
@@ -969,7 +975,7 @@
         if (reduce) {
           // Reduced motion: no scrubbed flight, no looping wobble. The plane
           // rests calmly at the horizon while content still fades in on scroll.
-          gsap.set(wrap, { scale: S1, y: yFor(Y1), force3D: true });
+          gsap.set(wrap, { scale: S1, y: yFor(Y1), x: planeX(), force3D: true });
           inner.style.setProperty("--tint", "0.2");
           cloudsNear.style.opacity = "0.3";
           setupRail(railFill);
@@ -986,7 +992,7 @@
         function applyFlight(p) {
           var s = scaleFor(p);
           var anchor = anchorFor(p);
-          gsap.set(wrap, { scale: s, y: yFor(anchor), force3D: true });
+          gsap.set(wrap, { scale: s, y: yFor(anchor), x: planeX(), force3D: true });
 
           // Warm sunrise backlight — subtle, since the asset already has baked
           // golden rim lighting. Strongest high in the sky, gone by ~42%.
@@ -998,7 +1004,7 @@
 
           // Rendered geometry of the aircraft + main-gear screen coordinates.
           var pw = inner.offsetWidth * s;          // rendered plane width (px)
-          var cx = W() / 2;
+          var cx = W() / 2 + planeX();
           var wy = anchor * H();                   // wheel contact line
           var dx = GEAR_DX * pw;
           var ww = Math.max(24, GEAR_W * pw);
