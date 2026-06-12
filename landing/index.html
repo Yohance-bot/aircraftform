@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AMC Airmodelcrafts — Build. Fly. Soar.</title>
+  <meta name="description" content="AMC Airmodelcrafts — aeromodelling kits, kids flying camps, school STEM programs, and aviation events. Build it. Fly it. Own the sky." />
+
+  <!-- Preload the two hero assets (WebP) so the approach sequence is ready on first paint -->
+  <link rel="preload" as="image" href="./golderndawn.webp" type="image/webp" />
+  <link rel="preload" as="image" href="./plane2-3.webp" type="image/webp" />
+
+  <!-- GSAP + ScrollTrigger via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+
+  <style>
+    /* ============================================================
+       DESIGN TOKENS / TUNABLES
+       The flight-path constants are mirrored 1:1 in the JS below.
+       --vp-y is the single calibration knob for the horizon.
+    ============================================================ */
+    :root {
+      --vp-y: 60%;                 /* vanishing-point Y as % of viewport height */
+      --bg-pos-y: 56%;             /* background-position-y to seat the horizon  */
+
+      --ink:        #0b1220;
+      --ink-soft:   #38445c;
+      --paper:      #f6f8fc;
+      --dawn-orange:#ff8a3d;
+      --dawn-amber: #ffb347;
+      --dawn-rose:  #ff6f91;
+      --sky-blue:   #2b6cff;
+      --sky-deep:   #0a1f44;
+
+      --maxw: 640px;
+      --shadow-card: 0 24px 60px -18px rgba(10, 31, 68, 0.45);
+
+      --font: "Helvetica Neue", Helvetica, "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: auto; -webkit-text-size-adjust: 100%; }
+
+    body {
+      font-family: var(--font);
+      color: var(--ink);
+      background: #04122e;
+      /* ----- THE 500VH SCROLL TRACK ----- */
+      /* #track below is the literal trigger; body just holds it. */
+      overflow-x: hidden;
+    }
+
+    /* ============================================================
+       SCROLL TRACK — the 500vh canvas that drives everything
+    ============================================================ */
+    #track { position: relative; height: 320vh; width: 100%; }
+
+    /* ============================================================
+       FIXED CANVAS LAYER (background + plane). pointer-events:none
+       so the UI panels above can receive clicks/typing.
+    ============================================================ */
+    #canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    /* ----- Z-INDEX SANDWICH (inside #canvas) -----
+       1 bg · 2 haze · 3 far clouds · 4 contact-shadow · 4 smoke ·
+       5 plane · 6 wheel-blur · 7 near (foreground) clouds · 8 vp-marker  */
+    #bg {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      /* WebP first with a JPG fallback for older browsers. */
+      background-image: url("./golderndawn.jpg");
+      background-image: image-set(url("./golderndawn.webp") type("image/webp"), url("./golderndawn.jpg") type("image/jpeg"));
+      background-image: -webkit-image-set(url("./golderndawn.webp") 1x, url("./golderndawn.jpg") 1x);
+      background-size: cover;
+      background-position: center var(--bg-pos-y);
+      background-repeat: no-repeat;
+      transform: translateZ(0);
+    }
+
+    /* A soft atmospheric haze that thickens the depth near the horizon */
+    #haze {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background:
+        radial-gradient(120% 70% at 50% var(--vp-y), rgba(255, 178, 71, 0.28) 0%, rgba(255, 178, 71, 0) 42%),
+        linear-gradient(180deg, rgba(4, 18, 46, 0.10) 0%, rgba(4, 18, 46, 0) 30%, rgba(4, 18, 46, 0) 70%, rgba(4, 18, 46, 0.18) 100%);
+      mix-blend-mode: screen;
+      opacity: 0.9;
+    }
+
+    /* ----- CLOUD LAYERS (the atmospheric sandwich) ----- */
+    .clouds { position: absolute; inset: 0; overflow: hidden; }
+    .clouds--far  { z-index: 3; }
+    .clouds--near { z-index: 7; }
+
+    .cloud {
+      position: absolute;
+      border-radius: 50%;
+      background:
+        radial-gradient(closest-side at 30% 62%, rgba(255,255,255,0.95), rgba(255,255,255,0) 72%),
+        radial-gradient(closest-side at 52% 42%, rgba(255,255,255,0.98), rgba(255,255,255,0) 74%),
+        radial-gradient(closest-side at 72% 60%, rgba(255,255,255,0.92), rgba(255,255,255,0) 72%),
+        radial-gradient(closest-side at 50% 70%, rgba(255,255,255,0.9), rgba(255,255,255,0) 70%);
+      will-change: transform;
+    }
+    /* Distant clouds: small, hazy, tinted by the dawn, gentle blur. */
+    .clouds--far .cloud  { filter: blur(3px) saturate(108%); opacity: 0.55; mix-blend-mode: screen; }
+    /* Foreground clouds: large, heavily blurred wisps drifting in front. */
+    .clouds--near .cloud { filter: blur(16px); opacity: 0.85; }
+
+    /* ----- DYNAMIC CONTACT SHADOW (separate from the baked PNG shadow) ----- */
+    .contact-shadow {
+      position: absolute;
+      left: 50%;
+      top: 0;                      /* JS positions it under the wheels */
+      z-index: 4;
+      width: 46vw;
+      height: 7vh;
+      transform: translate(-50%, -50%) scaleX(1);
+      background: radial-gradient(closest-side, rgba(8, 14, 30, 0.55) 0%, rgba(8, 14, 30, 0.28) 45%, rgba(8, 14, 30, 0) 78%);
+      opacity: 0;                  /* JS ramps this in at touchdown */
+      filter: blur(10px);
+      will-change: opacity, transform, filter;
+    }
+
+    /* ----- TOUCHDOWN SMOKE BURST (above the plane so it billows visibly) ----- */
+    .smoke-layer { position: absolute; inset: 0; z-index: 6; }
+    .smoke {
+      position: absolute;
+      width: 150px; height: 150px;
+      border-radius: 50%;
+      background: radial-gradient(closest-side, rgba(226,226,232,0.78) 0%, rgba(206,208,214,0.42) 46%, rgba(196,198,204,0) 74%);
+      opacity: 0;
+      will-change: transform, opacity;
+      filter: blur(6px);
+    }
+
+    /* ----- WHEEL MOTION-BLUR OVERLAYS (touchdown spin illusion) ----- */
+    .wheel-blur {
+      position: absolute;
+      z-index: 6;
+      width: 5vw; height: 5vw;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      backdrop-filter: blur(0px);
+      -webkit-backdrop-filter: blur(0px);
+      opacity: 0;
+      will-change: backdrop-filter, opacity;
+    }
+
+    /* The GSAP-driven scroll layer: only translateY + scale live here.
+       Full-width layer scaled from the wheel-contact origin; the inner element
+       carries the actual (centered) plane so responsive width is a one-liner. */
+    .plane-wrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      z-index: 5;
+      transform-origin: 50% 72%;   /* tyre/contact line of plane2-3.png */
+      will-change: transform;
+      backface-visibility: hidden;
+    }
+
+    /* Inner layer carries the independent turbulence wobble + centers the
+       plane image. The element is mostly transparent padding; the visible
+       wingspan is ~0.686 of this width, so a 98vw element ≈ 67vw wingspan at
+       full scale — nested inside the runway. Change on mobile below. */
+    .plane-inner {
+      --plane-w: clamp(320px, 98vw, 1500px);
+      position: relative;
+      width: var(--plane-w);
+      margin: 0 auto;
+      transform-origin: 50% 72%;
+      will-change: transform;
+      backface-visibility: hidden;
+    }
+
+    .plane-inner picture { display: block; }
+    .plane-inner img {
+      display: block;
+      width: 100%;
+      height: auto;
+      user-select: none;
+      -webkit-user-drag: none;
+      /* Airborne base — JS tightens this into a grounded drop-shadow at 90-100%. */
+      filter: drop-shadow(0 12px 18px rgba(6, 16, 38, 0.12));
+    }
+
+    /* Warm sunrise tint, masked to the plane silhouette so only the aircraft
+       catches the dawn glow. JS fades --tint to 0 as it descends out of the
+       backlight. */
+    .plane-tint {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 170, 90, 0.95) 0%, rgba(255, 120, 120, 0.7) 55%, rgba(255, 150, 90, 0.5) 100%);
+      -webkit-mask-image: url("./plane2-3.webp");
+      mask-image: url("./plane2-3.webp");
+      -webkit-mask-size: 100% 100%;
+      mask-size: 100% 100%;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      mix-blend-mode: overlay;
+      opacity: var(--tint, 0);
+    }
+
+    /* Calibration marker — toggled via ?calibrate=1 to seat the horizon. */
+    #vp-marker {
+      position: absolute;
+      left: 0; right: 0;
+      top: var(--vp-y);
+      height: 0;
+      border-top: 1px dashed rgba(255, 60, 60, 0.9);
+      display: none;
+      z-index: 5;
+    }
+    #vp-marker::after {
+      content: "vanishing point (--vp-y)";
+      position: absolute; left: 12px; top: -18px;
+      font: 600 12px/1 var(--font);
+      color: rgba(255, 60, 60, 0.95);
+    }
+    body.calibrate #vp-marker { display: block; }
+
+    /* ============================================================
+       UI CONTENT LAYER — semantic panels over the fixed canvas.
+       Layer itself ignores pointer events; each panel re-enables.
+    ============================================================ */
+    #ui {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .panel {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(92vw, var(--maxw));
+      opacity: 0;                 /* GSAP fades these in/out by scroll */
+      pointer-events: auto;       /* re-enable interaction on the panel */
+      will-change: opacity, transform;
+    }
+
+    /* Vertical seating of each cinematic panel within the viewport. */
+    .panel--hero   { top: 11vh; text-align: center; }
+    .panel--paths  { top: 8vh; width: min(94vw, 880px); }
+    .panel--bridge { top: 24vh; text-align: center; width: min(92vw, 720px); }
+
+    /* Glass cards for legibility over the photographic canvas */
+    .card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.72) 100%);
+      backdrop-filter: blur(14px) saturate(120%);
+      -webkit-backdrop-filter: blur(14px) saturate(120%);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 22px;
+      box-shadow: var(--shadow-card);
+      padding: 30px 30px;
+    }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--dawn-orange);
+    }
+    .eyebrow .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--dawn-orange); box-shadow: 0 0 0 4px rgba(255,138,61,0.18); }
+
+    h1, h2 { line-height: 1.04; letter-spacing: -0.02em; }
+    h1 { font-size: clamp(40px, 8vw, 76px); font-weight: 900; }
+    h2 { font-size: clamp(28px, 5.2vw, 46px); font-weight: 900; }
+    .lede { margin-top: 14px; font-size: clamp(16px, 2.4vw, 19px); line-height: 1.55; color: var(--ink-soft); }
+    p.body { margin-top: 12px; font-size: 16px; line-height: 1.6; color: var(--ink-soft); }
+
+    /* Hero sits directly on the sky (no card) for a cinematic open. */
+    .hero-title { color: #fff; text-shadow: 0 8px 40px rgba(6, 16, 38, 0.55), 0 2px 6px rgba(6,16,38,0.35); }
+    .hero-lede  { color: rgba(255,255,255,0.92); text-shadow: 0 2px 14px rgba(6,16,38,0.45); max-width: 30ch; margin-inline: auto; }
+    .hero .eyebrow { color: #ffd9b0; }
+    .hero .eyebrow .dot { background: #ffd9b0; box-shadow: 0 0 0 4px rgba(255,217,176,0.25); }
+
+    .cta-row { margin-top: 26px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-size: 15px; font-weight: 800; letter-spacing: 0.01em;
+      padding: 14px 24px; border-radius: 999px; border: 0; cursor: pointer;
+      text-decoration: none; transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .btn--primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--dawn-orange), var(--dawn-rose));
+      box-shadow: 0 14px 30px -8px rgba(255, 111, 145, 0.6);
+    }
+    .btn--primary:hover { transform: translateY(-2px); box-shadow: 0 20px 40px -10px rgba(255, 111, 145, 0.7); }
+    .btn--ghost {
+      color: #fff; background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.5); backdrop-filter: blur(6px);
+    }
+    .btn--ghost:hover { background: rgba(255,255,255,0.24); transform: translateY(-2px); }
+    .btn--dark { color: #fff; background: var(--ink); box-shadow: 0 14px 30px -10px rgba(11,18,32,0.6); }
+    .btn--dark:hover { transform: translateY(-2px); }
+
+    .scroll-hint {
+      margin-top: 34px; display: inline-flex; flex-direction: column; align-items: center; gap: 8px;
+      color: rgba(255,255,255,0.9); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700;
+    }
+    .scroll-hint .mouse {
+      width: 26px; height: 42px; border: 2px solid rgba(255,255,255,0.85); border-radius: 16px; position: relative;
+    }
+    .scroll-hint .mouse::after {
+      content: ""; position: absolute; left: 50%; top: 8px; width: 4px; height: 8px; border-radius: 4px;
+      background: #fff; transform: translateX(-50%); animation: wheel 1.6s ease-in-out infinite;
+    }
+    @keyframes wheel { 0% { opacity: 0; transform: translate(-50%, 0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 12px); } }
+
+    /* Feature lists inside cards */
+    .feat { margin-top: 18px; display: grid; gap: 12px; }
+    .feat .row { display: flex; gap: 12px; align-items: flex-start; }
+    .feat .ic {
+      flex: 0 0 auto; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
+      font-size: 18px; background: rgba(255,138,61,0.14); color: var(--dawn-orange);
+    }
+    .feat .ttl { font-weight: 800; font-size: 15.5px; }
+    .feat .sub { font-size: 14px; color: var(--ink-soft); margin-top: 2px; }
+
+    .pill-row { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); background: rgba(11,18,32,0.06); border: 1px solid rgba(11,18,32,0.08); border-radius: 999px; padding: 7px 13px; }
+
+    /* Booking form */
+    .form-grid { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { font-size: 13px; font-weight: 800; color: var(--ink); }
+    .field input, .field select {
+      font-family: var(--font); font-size: 15px; color: var(--ink);
+      padding: 12px 13px; border-radius: 12px; border: 1px solid rgba(11,18,32,0.14);
+      background: rgba(255,255,255,0.9); outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .field input:focus, .field select:focus { border-color: var(--dawn-orange); box-shadow: 0 0 0 4px rgba(255,138,61,0.18); }
+    .form-note { margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); }
+    .form-ok { margin-top: 12px; font-size: 14px; font-weight: 700; color: #0b7a4b; display: none; }
+    .form-ok.show { display: block; }
+
+    .footer-links { margin-top: 16px; display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+    .footer-links a { color: rgba(255,255,255,0.92); text-decoration: none; font-weight: 700; font-size: 14px; }
+    .footer-links a:hover { color: #fff; text-decoration: underline; }
+    .footer-fine { margin-top: 14px; color: rgba(255,255,255,0.65); font-size: 12.5px; }
+
+    /* Progress rail (top of viewport) */
+    #rail { position: fixed; top: 0; left: 0; height: 3px; width: 100%; z-index: 6; background: rgba(255,255,255,0.12); pointer-events: none; }
+    #rail .fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--dawn-amber), var(--dawn-rose)); box-shadow: 0 0 12px rgba(255,111,145,0.7); }
+
+    /* Tiny fixed brand mark */
+    #brand {
+      position: fixed; top: 18px; left: 22px; z-index: 6; pointer-events: none;
+      display: flex; align-items: center; gap: 10px; color: #fff;
+      font-weight: 900; letter-spacing: 0.02em; font-size: 16px; text-shadow: 0 2px 12px rgba(6,16,38,0.5);
+    }
+    #brand .mk { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 16px;
+      background: linear-gradient(135deg, var(--dawn-orange), var(--dawn-rose)); box-shadow: 0 8px 20px -6px rgba(255,111,145,0.6); }
+    #brand small { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.22em; opacity: 0.85; }
+
+    /* ----- Hero stats banner ----- */
+    .stats {
+      margin: 26px auto 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+      max-width: 640px;
+    }
+    .stat {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 10px 16px; border-radius: 14px;
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.28);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff;
+    }
+    .stat b { font-size: 22px; font-weight: 900; text-shadow: 0 2px 12px rgba(6,16,38,0.4); }
+    .stat span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; color: rgba(255,255,255,0.86); }
+
+    /* ----- Paths grid ----- */
+    .paths-grid { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .path {
+      display: flex; flex-direction: column; gap: 4px; text-decoration: none;
+      padding: 16px 16px; border-radius: 16px; border: 1px solid rgba(11,18,32,0.10);
+      background: rgba(255,255,255,0.6); transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    .path:hover { transform: translateY(-3px); background: #fff; box-shadow: 0 16px 34px -16px rgba(11,18,32,0.4); }
+    .path-no { font-size: 12px; font-weight: 900; color: var(--dawn-orange); letter-spacing: 0.1em; }
+    .path-ttl { font-size: 17px; font-weight: 900; color: var(--ink); }
+    .path-sub { font-size: 13.5px; color: var(--ink-soft); line-height: 1.45; }
+    .path-link { margin-top: 6px; font-size: 13.5px; font-weight: 800; color: var(--dawn-rose); }
+
+    .bridge-title { color: #fff; text-shadow: 0 8px 40px rgba(6,16,38,0.55); }
+
+    /* ============================================================
+       STORE / NORMAL-FLOW CONTENT (covers the fixed canvas as it scrolls up)
+    ============================================================ */
+    #site {
+      position: relative; z-index: 4;
+      background:
+        radial-gradient(120% 60% at 50% 0%, rgba(255,178,71,0.18) 0%, rgba(255,178,71,0) 50%),
+        linear-gradient(180deg, #fff5ec 0%, #f4f7fc 22%, #eef2f9 100%);
+      box-shadow: 0 -30px 60px -20px rgba(6,16,38,0.35);
+    }
+    .wrap { width: min(92vw, 1120px); margin: 0 auto; }
+    .section { padding: 84px 0; }
+    .section--hangar { padding-top: 56px; }
+    .sec-head { text-align: center; margin-bottom: 36px; }
+    .sec-head .eyebrow { justify-content: center; }
+    .sec-head h2 { margin-top: 10px; color: var(--ink); }
+    .sec-sub { margin-top: 10px; color: var(--ink-soft); font-size: 16px; }
+
+    /* Service categories */
+    .svc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .svc {
+      display: flex; flex-direction: column; gap: 10px;
+      background: #fff; border: 1px solid rgba(11,18,32,0.08); border-radius: 22px;
+      padding: 26px 24px; box-shadow: 0 20px 50px -28px rgba(11,18,32,0.4);
+    }
+    .svc-ic {
+      width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center; font-size: 26px;
+      background: linear-gradient(135deg, rgba(255,138,61,0.18), rgba(255,111,145,0.18));
+    }
+    .svc-tag { font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dawn-orange); }
+    .svc h3 { font-size: 21px; font-weight: 900; color: var(--ink); line-height: 1.15; }
+    .svc p { font-size: 14.5px; color: var(--ink-soft); line-height: 1.55; }
+    .ticks { list-style: none; display: grid; gap: 8px; margin: 4px 0 6px; }
+    .ticks li { position: relative; padding-left: 26px; font-size: 14px; color: var(--ink); line-height: 1.4; }
+    .ticks li::before {
+      content: "\2713"; position: absolute; left: 0; top: 0; width: 18px; height: 18px; border-radius: 50%;
+      display: grid; place-items: center; font-size: 11px; font-weight: 900; color: #fff;
+      background: linear-gradient(135deg, var(--dawn-orange), var(--dawn-rose));
+    }
+    .svc .btn { margin-top: auto; align-self: flex-start; }
+
+    /* Hangar catalogue */
+    .filters { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; margin-bottom: 28px; }
+    .chip {
+      font-family: var(--font); font-size: 13px; font-weight: 800; cursor: pointer;
+      padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(11,18,32,0.14);
+      background: #fff; color: var(--ink-soft); transition: all .15s ease;
+    }
+    .chip:hover { border-color: var(--dawn-orange); color: var(--dawn-orange); }
+    .chip.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+    .hangar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .prod {
+      display: flex; flex-direction: column; gap: 8px;
+      background: #fff; border: 1px solid rgba(11,18,32,0.08); border-radius: 18px; padding: 18px 18px 16px;
+      box-shadow: 0 14px 36px -24px rgba(11,18,32,0.4); transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .prod:hover { transform: translateY(-4px); box-shadow: 0 22px 46px -22px rgba(11,18,32,0.5); }
+    .prod-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .prod-cat { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dawn-orange); }
+    .lvl { font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
+    .lvl.Beginner { background: rgba(16,185,129,0.14); color: #0b7a4b; }
+    .lvl.Intermediate { background: rgba(59,130,246,0.14); color: #1d4ed8; }
+    .lvl.Pro { background: rgba(244,63,94,0.14); color: #be123c; }
+    .prod h3 { font-size: 16px; font-weight: 900; color: var(--ink); line-height: 1.2; }
+    .prod-meta { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 8px; }
+    .prod-price { font-size: 19px; font-weight: 900; color: var(--ink); }
+    .prod-age { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+
+    /* Intake forms */
+    .section--forms { background: rgba(255,255,255,0.5); }
+    .tabs { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 26px; }
+    .tab {
+      font-family: var(--font); font-size: 14px; font-weight: 800; cursor: pointer;
+      padding: 12px 20px; border-radius: 999px; border: 1px solid rgba(11,18,32,0.14);
+      background: #fff; color: var(--ink-soft); transition: all .15s ease;
+    }
+    .tab.is-active { background: linear-gradient(135deg, var(--dawn-orange), var(--dawn-rose)); color: #fff; border-color: transparent; box-shadow: 0 12px 26px -10px rgba(255,111,145,0.55); }
+    .intake {
+      display: none; max-width: 760px; margin: 0 auto;
+      background: #fff; border: 1px solid rgba(11,18,32,0.08); border-radius: 22px;
+      padding: 30px 30px; box-shadow: 0 24px 60px -28px rgba(11,18,32,0.45);
+    }
+    .intake.is-active { display: block; }
+    .intake-intro { font-size: 14.5px; color: var(--ink-soft); line-height: 1.55; margin-bottom: 18px; }
+    .fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .fgrid .field.full { grid-column: 1 / -1; }
+    .fgrid textarea {
+      font-family: var(--font); font-size: 15px; color: var(--ink); resize: vertical;
+      padding: 12px 13px; border-radius: 12px; border: 1px solid rgba(11,18,32,0.14); background: rgba(255,255,255,0.9); outline: none;
+    }
+    .fgrid textarea:focus { border-color: var(--dawn-orange); box-shadow: 0 0 0 4px rgba(255,138,61,0.18); }
+    .radio-row, .check-row { display: flex; flex-wrap: wrap; gap: 10px 18px; padding-top: 2px; }
+    .radio, .check { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+    .radio input, .check input { accent-color: var(--dawn-orange); width: 16px; height: 16px; }
+    .wfull { width: 100%; justify-content: center; }
+
+    /* Footer */
+    .site-footer { position: relative; z-index: 4; background: var(--sky-deep); color: rgba(255,255,255,0.82); padding: 56px 0 30px; }
+    .foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 30px; }
+    .foot-brand p { margin-top: 12px; font-size: 14px; line-height: 1.6; max-width: 38ch; color: rgba(255,255,255,0.7); }
+    .foot-logo { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 17px; color: #fff; }
+    .foot-logo .mk { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 15px; background: linear-gradient(135deg, var(--dawn-orange), var(--dawn-rose)); }
+    .foot-col h4 { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; margin-bottom: 12px; }
+    .foot-col a, .foot-col p { display: block; color: rgba(255,255,255,0.72); text-decoration: none; font-size: 14px; line-height: 1.5; margin-bottom: 8px; }
+    .foot-col a:hover { color: #fff; }
+    .foot-legal { margin-top: 36px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.12); text-align: center; font-size: 12.5px; color: rgba(255,255,255,0.55); }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (max-width: 980px) {
+      .svc-grid { grid-template-columns: 1fr; }
+      .hangar-grid { grid-template-columns: repeat(2, 1fr); }
+      .foot-grid { grid-template-columns: 1fr 1fr; }
+      .foot-brand { grid-column: 1 / -1; }
+    }
+    @media (max-width: 720px) {
+      .card { padding: 22px 20px; border-radius: 18px; }
+      .paths-grid { grid-template-columns: 1fr; }
+      .fgrid { grid-template-columns: 1fr; }
+      .intake { padding: 22px 18px; }
+      .section { padding: 60px 0; }
+      .stats { gap: 8px; }
+      .stat { padding: 8px 12px; }
+      .stat b { font-size: 18px; }
+      .panel--hero { top: 8vh; }
+      .panel--paths { top: 5vh; }
+      #brand small { display: none; }
+      /* Shorter scroll track; element fills width so wingspan nests in runway. */
+      #track { height: 300vh; }
+      .plane-inner { --plane-w: clamp(280px, 116vw, 620px); }
+    }
+    @media (max-width: 460px) {
+      .hangar-grid { grid-template-columns: 1fr; }
+      .foot-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Drifting clouds cross the viewport horizontally. */
+    @keyframes cloud-cross {
+      from { transform: translateX(-45vw); }
+      to   { transform: translateX(135vw); }
+    }
+
+    /* ============================================================
+       REDUCED MOTION — settle the plane on the runway, kill loops.
+    ============================================================ */
+    @media (prefers-reduced-motion: reduce) {
+      .scroll-hint .mouse::after { animation: none; }
+      .cloud { animation: none !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- The 500vh scroll spacer that drives the whole experience (in normal flow). -->
+  <div id="track" aria-hidden="true"></div>
+
+  <!-- Progress rail + brand -->
+  <div id="rail"><div class="fill"></div></div>
+  <div id="brand">
+    <span class="mk">&#9992;&#65039;</span>
+    <span>AMC<small>AIRMODELCRAFTS</small></span>
+  </div>
+
+  <!-- ===================== FIXED CANVAS ===================== -->
+  <div id="canvas" aria-hidden="true">
+    <div id="bg"></div>
+    <div id="haze"></div>
+
+    <!-- Distant clouds, behind the plane -->
+    <div class="clouds clouds--far" id="cloudsFar"></div>
+
+    <!-- Dynamic contact shadow + touchdown smoke (behind the aircraft) -->
+    <div class="contact-shadow" id="contactShadow"></div>
+    <div class="smoke-layer" id="smokeLayer"></div>
+
+    <!-- The aircraft -->
+    <div class="plane-wrap">
+      <div class="plane-inner">
+        <picture>
+          <source srcset="./plane2-3.webp" type="image/webp" />
+          <img src="./plane2-3.png" alt="" decoding="async" />
+        </picture>
+        <div class="plane-tint"></div>
+      </div>
+    </div>
+
+    <!-- Localized wheel motion-blur overlays (touchdown spin) -->
+    <div class="wheel-blur" id="wheelBlurL"></div>
+    <div class="wheel-blur" id="wheelBlurR"></div>
+
+    <!-- Foreground clouds, drifting in front of the plane -->
+    <div class="clouds clouds--near" id="cloudsNear"></div>
+
+    <div id="vp-marker"></div>
+  </div>
+
+  <!-- ===================== CINEMATIC UI OVERLAY ===================== -->
+  <div id="ui">
+    <!-- HERO -->
+    <section class="panel panel--hero hero" data-panel="hero">
+      <span class="eyebrow"><span class="dot"></span> Build &middot; Fly &middot; Learn</span>
+      <h1 class="hero-title">Where kids learn<br />to build it &amp; fly it</h1>
+      <p class="lede hero-lede">Laser-cut kits, hands-on workshops, school STEM programs and high-flying events &mdash; pick your runway and take off.</p>
+      <div class="cta-row">
+        <a class="btn btn--primary" href="#paths" data-scroll="paths">&#128640; Start Exploring</a>
+        <a class="btn btn--ghost" href="#hangar" data-scroll="hangar">&#128722; Shop the Hangar</a>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>10k+</b><span>Models flown</span></div>
+        <div class="stat"><b>120+</b><span>Schools reached</span></div>
+        <div class="stat"><b>50+</b><span>Camps run</span></div>
+        <div class="stat"><b>4.9&#9733;</b><span>Parent rating</span></div>
+      </div>
+      <span class="scroll-hint"><span class="mouse"></span> Scroll to land</span>
+    </section>
+
+    <!-- PATHS -->
+    <section class="panel panel--paths" data-panel="paths">
+      <div class="card">
+        <span class="eyebrow"><span class="dot"></span> Choose your runway</span>
+        <h2>Where do you want to go?</h2>
+        <p class="body">Four clear destinations instead of one messy menu.</p>
+        <div class="paths-grid">
+          <a class="path" href="#hangar" data-scroll="hangar">
+            <span class="path-no">01</span>
+            <span class="path-ttl">Shop Kits</span>
+            <span class="path-sub">Gliders, RC planes, drones, balsa, electronics &amp; tools.</span>
+            <span class="path-link">Browse catalogue &#8594;</span>
+          </a>
+          <a class="path" href="#form-workshop" data-scroll="form-workshop">
+            <span class="path-no">02</span>
+            <span class="path-ttl">Workshops &amp; Camps</span>
+            <span class="path-sub">Weekend builds &amp; summer camps for young aviators.</span>
+            <span class="path-link">Book a session &#8594;</span>
+          </a>
+          <a class="path" href="#form-school" data-scroll="form-school">
+            <span class="path-no">03</span>
+            <span class="path-ttl">School STEM Programs</span>
+            <span class="path-sub">Curriculum, teacher training &amp; drone/UAV labs.</span>
+            <span class="path-link">Enquire for school &#8594;</span>
+          </a>
+          <a class="path" href="#form-event" data-scroll="form-event">
+            <span class="path-no">04</span>
+            <span class="path-ttl">Events &amp; Parties</span>
+            <span class="path-sub">Birthday parties, fests &amp; STEM competitions.</span>
+            <span class="path-link">Plan an event &#8594;</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- BRIDGE INTO THE STORE -->
+    <section class="panel panel--bridge" data-panel="bridge">
+      <span class="eyebrow" style="color:#ffd9b0; justify-content:center;"><span class="dot" style="background:#ffd9b0;"></span> Cleared to taxi</span>
+      <h2 class="bridge-title">The hangar is open.</h2>
+      <p class="lede hero-lede">Keep scrolling for kits, camps, school programs &amp; events.</p>
+    </section>
+  </div>
+
+  <!-- ===================== STORE / NORMAL-FLOW CONTENT ===================== -->
+  <main id="site">
+    <!-- SERVICE CATEGORIES -->
+    <section class="section" id="services">
+      <div class="wrap">
+        <header class="sec-head">
+          <span class="eyebrow"><span class="dot"></span> What we do</span>
+          <h2>Three ways to take off.</h2>
+        </header>
+        <div class="svc-grid">
+          <article class="svc">
+            <div class="svc-ic">&#128736;&#65039;</div>
+            <span class="svc-tag">For parents &amp; young flyers</span>
+            <h3>Workshops &amp; Summer Camps</h3>
+            <p>Hands-on weekend builds and multi-day camps where kids design, build and actually fly their own aircraft.</p>
+            <ul class="ticks">
+              <li>Small batches, ages 7&ndash;16, all materials included</li>
+              <li>Weekend workshops &amp; week-long camps</li>
+              <li>Take-home model + certificate</li>
+            </ul>
+            <a class="btn btn--primary" href="#form-workshop" data-scroll="form-workshop">Check dates &amp; book &#8594;</a>
+          </article>
+          <article class="svc">
+            <div class="svc-ic">&#127891;</div>
+            <span class="svc-tag">For schools &amp; educators</span>
+            <h3>School STEM Programs</h3>
+            <p>A separate track for decision-makers: structured curriculum mapped to outcomes, teacher training and lab setup.</p>
+            <ul class="ticks">
+              <li>Term-long curriculum &amp; lesson plans</li>
+              <li>ATL / drone-lab setup &amp; kits</li>
+              <li>Teacher training + assessment support</li>
+            </ul>
+            <a class="btn btn--primary" href="#form-school" data-scroll="form-school">Request a proposal &#8594;</a>
+          </article>
+          <article class="svc">
+            <div class="svc-ic">&#127881;</div>
+            <span class="svc-tag">For celebrations &amp; competitions</span>
+            <h3>Events, Parties &amp; Competitions</h3>
+            <p>Themed birthday parties, society fests, corporate builds and inter-school flying competitions &mdash; run end-to-end.</p>
+            <ul class="ticks">
+              <li>Birthday &amp; group build-and-fly parties</li>
+              <li>School / society fests &amp; expos</li>
+              <li>Drone-racing &amp; glider competitions</li>
+            </ul>
+            <a class="btn btn--primary" href="#form-event" data-scroll="form-event">Plan my event &#8594;</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- THE HANGAR (CATALOGUE) -->
+    <section class="section section--hangar" id="hangar">
+      <div class="wrap">
+        <header class="sec-head">
+          <span class="eyebrow"><span class="dot"></span> The Hangar</span>
+          <h2>Shop the catalogue.</h2>
+          <p class="sec-sub">Kits, materials, electronics and classroom boxes &mdash; sorted by what you fly.</p>
+        </header>
+        <div class="filters" id="filters">
+          <button class="chip is-active" data-filter="all">All</button>
+          <button class="chip" data-filter="Gliders">Gliders</button>
+          <button class="chip" data-filter="Rubber-powered">Rubber-powered</button>
+          <button class="chip" data-filter="RC Kits">RC Kits</button>
+          <button class="chip" data-filter="Drones">Drones</button>
+          <button class="chip" data-filter="Materials">Materials</button>
+          <button class="chip" data-filter="Electronics">Electronics</button>
+          <button class="chip" data-filter="STEM Kits">STEM Kits</button>
+        </div>
+        <div class="hangar-grid" id="hangarGrid"></div>
+      </div>
+    </section>
+
+    <!-- INTAKE FORMS -->
+    <section class="section section--forms" id="forms">
+      <div class="wrap">
+        <header class="sec-head">
+          <span class="eyebrow"><span class="dot"></span> Get started</span>
+          <h2>Tell us what you're planning.</h2>
+        </header>
+
+        <div class="tabs" id="formTabs">
+          <button class="tab is-active" data-tab="workshop">&#128736;&#65039; Workshops &amp; Camps</button>
+          <button class="tab" data-tab="school">&#127891; School STEM</button>
+          <button class="tab" data-tab="event">&#127881; Events &amp; Parties</button>
+        </div>
+
+        <!-- FORM 1: WORKSHOP & CAMP -->
+        <form class="intake is-active" id="form-workshop" data-form="workshop" novalidate>
+          <p class="intake-intro">For parents &amp; young flyers. Tell us a little about your child and we'll send available batches near you.</p>
+          <div class="fgrid">
+            <div class="field full">
+              <label>Interest type</label>
+              <div class="radio-row">
+                <label class="radio"><input type="radio" name="w_interest" value="Weekend Workshop" checked /> Weekend Workshop</label>
+                <label class="radio"><input type="radio" name="w_interest" value="Summer Camp" /> Summer Camp</label>
+                <label class="radio"><input type="radio" name="w_interest" value="Not sure yet" /> Not sure yet</label>
+              </div>
+            </div>
+            <div class="field"><label>Parent's full name *</label><input type="text" name="w_parent" required placeholder="e.g. Priya Sharma" /></div>
+            <div class="field"><label>Phone / WhatsApp *</label><input type="tel" name="w_phone" required placeholder="10-digit mobile" inputmode="numeric" /></div>
+            <div class="field"><label>Email address</label><input type="email" name="w_email" placeholder="you@example.com" /></div>
+            <div class="field"><label>City / area *</label><input type="text" name="w_city" required placeholder="e.g. Paschim Vihar, Delhi" /></div>
+            <div class="field"><label>Child's name</label><input type="text" name="w_child" placeholder="e.g. Arjun" /></div>
+            <div class="field"><label>Child's age *</label>
+              <select name="w_age" required><option value="" selected disabled>Select age</option><option>6&ndash;8</option><option>9&ndash;11</option><option>12&ndash;14</option><option>15&ndash;16</option></select>
+            </div>
+            <div class="field"><label>Preferred timing</label>
+              <select name="w_timing"><option>Any</option><option>This month</option><option>Next month</option><option>Summer break</option><option>Weekends only</option></select>
+            </div>
+            <div class="field full"><label>Anything else?</label><textarea name="w_notes" rows="3" placeholder="Experience level, group booking, questions&hellip;"></textarea></div>
+            <div class="field full"><button class="btn btn--dark wfull" type="submit">&#128197; Request available batches</button></div>
+          </div>
+          <div class="form-ok">&#9989; You're on the flight list! Thanks! We'll WhatsApp you the next available workshop &amp; camp batches within a day.</div>
+        </form>
+
+        <!-- FORM 2: SCHOOL STEM -->
+        <form class="intake" id="form-school" data-form="school" novalidate>
+          <p class="intake-intro">For schools &amp; educators. Share your details and we'll send a curriculum + lab-setup proposal with pricing tiers.</p>
+          <div class="fgrid">
+            <div class="field"><label>School name *</label><input type="text" name="s_school" required placeholder="School name" /></div>
+            <div class="field"><label>City *</label><input type="text" name="s_city" required placeholder="City" /></div>
+            <div class="field"><label>Contact person name *</label><input type="text" name="s_person" required placeholder="Full name" /></div>
+            <div class="field"><label>Professional role</label><input type="text" name="s_role" placeholder="e.g. Principal" /></div>
+            <div class="field"><label>Official email address *</label><input type="email" name="s_email" required placeholder="name@school.edu" /></div>
+            <div class="field"><label>Phone number *</label><input type="tel" name="s_phone" required placeholder="Phone" inputmode="numeric" /></div>
+            <div class="field"><label>Grades involved</label><input type="text" name="s_grades" placeholder="e.g. Grades 6-9" /></div>
+            <div class="field"><label>Approx. students</label>
+              <select name="s_count"><option value="" selected disabled>Select count</option><option>Under 50</option><option>50&ndash;150</option><option>150&ndash;400</option><option>400+</option></select>
+            </div>
+            <div class="field full">
+              <label>Areas of interest</label>
+              <div class="check-row">
+                <label class="check"><input type="checkbox" name="s_areas" value="Term curriculum" /> Term curriculum</label>
+                <label class="check"><input type="checkbox" name="s_areas" value="ATL / Drone lab setup" /> ATL / Drone lab setup</label>
+                <label class="check"><input type="checkbox" name="s_areas" value="Teacher training" /> Teacher training</label>
+                <label class="check"><input type="checkbox" name="s_areas" value="Competitions / fest" /> Competitions / fest</label>
+                <label class="check"><input type="checkbox" name="s_areas" value="Kits supply" /> Kits supply</label>
+              </div>
+            </div>
+            <div class="field"><label>Planning timeline</label>
+              <select name="s_timeline"><option>This term</option><option>Next academic year</option><option>Just exploring</option></select>
+            </div>
+            <div class="field full"><label>Notes</label><textarea name="s_notes" rows="3" placeholder="Goals, existing labs, budget range, anything helpful&hellip;"></textarea></div>
+            <div class="field full"><button class="btn btn--dark wfull" type="submit">&#128196; Request proposal</button></div>
+          </div>
+          <div class="form-ok">&#9989; Proposal incoming! Thanks! Our education team will reach out with a tailored curriculum &amp; pricing proposal within 2 working days.</div>
+        </form>
+
+        <!-- FORM 3: EVENTS & PARTIES -->
+        <form class="intake" id="form-event" data-form="event" novalidate>
+          <p class="intake-intro">For celebrations &amp; competitions. Give us the basics and we'll design a build-and-fly package for you.</p>
+          <div class="fgrid">
+            <div class="field full">
+              <label>Type of event</label>
+              <div class="radio-row">
+                <label class="radio"><input type="radio" name="e_type" value="Birthday" checked /> Birthday</label>
+                <label class="radio"><input type="radio" name="e_type" value="Society fest" /> Society fest</label>
+                <label class="radio"><input type="radio" name="e_type" value="Corporate" /> Corporate</label>
+                <label class="radio"><input type="radio" name="e_type" value="Competition" /> Competition</label>
+              </div>
+            </div>
+            <div class="field"><label>Contact full name *</label><input type="text" name="e_name" required placeholder="Full name" /></div>
+            <div class="field"><label>Phone / WhatsApp *</label><input type="tel" name="e_phone" required placeholder="10-digit mobile" inputmode="numeric" /></div>
+            <div class="field"><label>Email address</label><input type="email" name="e_email" placeholder="you@example.com" /></div>
+            <div class="field"><label>Event planned date</label><input type="date" name="e_date" /></div>
+            <div class="field"><label>Group size *</label>
+              <select name="e_size" required><option value="" selected disabled>Select size</option><option>Up to 10</option><option>10&ndash;25</option><option>25&ndash;60</option><option>60+</option></select>
+            </div>
+            <div class="field"><label>Location / venue name</label><input type="text" name="e_venue" placeholder="Venue" /></div>
+            <div class="field full"><label>Tell us your vision</label><textarea name="e_vision" rows="3" placeholder="Age group, theme, indoor/outdoor, budget&hellip;"></textarea></div>
+            <div class="field full"><button class="btn btn--dark wfull" type="submit">&#127881; Get my event plan</button></div>
+          </div>
+          <div class="form-ok">&#9989; Let's make it fly! Thanks! We'll get in touch with a custom event package &amp; quote shortly.</div>
+        </form>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="site-footer" id="contact">
+      <div class="wrap foot-grid">
+        <div class="foot-brand">
+          <div class="foot-logo"><span class="mk">&#9992;&#65039;</span> AMC Airmodelcrafts</div>
+          <p>Aviation geeks making the best build-and-fly kits, camps and STEM programs in India.</p>
+        </div>
+        <div class="foot-col">
+          <h4>Explore</h4>
+          <a href="#hangar" data-scroll="hangar">Shop the Hangar</a>
+          <a href="#form-workshop" data-scroll="form-workshop">Workshops &amp; Camps</a>
+          <a href="#form-school" data-scroll="form-school">School STEM</a>
+          <a href="#form-event" data-scroll="form-event">Events &amp; Parties</a>
+        </div>
+        <div class="foot-col">
+          <h4>Get in touch</h4>
+          <p>A-4 Paschim Vihar, New Delhi 110063</p>
+          <a href="tel:+919953517691">&#128222; 99535 17691</a>
+          <a href="mailto:hello@airmodelcrafts.com">&#9993; hello@airmodelcrafts.com</a>
+        </div>
+      </div>
+      <div class="foot-legal">&copy; <span id="yr"></span> Airmodelcrafts India &middot; Build &middot; Fly &middot; Learn</div>
+    </footer>
+  </main>
+
+  <script>
+    /* ============================================================
+       AMC "Approach & Touchdown" engine
+       - Single exponential descent: the plane emerges as a dot at the
+         horizon (scale 0.05) and rushes into the foreground; screen-Y is
+         perspective-locked to scale so it rides the ground plane.
+       - Environmental depth: warm sunrise tint, far/near cloud sandwich,
+         dynamic contact shadow.
+       - Touchdown FX at 92%: tyre-smoke burst + wheel motion-blur spin.
+       - Independent turbulence wobble on .plane-inner.
+    ============================================================ */
+    (function () {
+      "use strict";
+
+      // ---- FLIGHT TUNABLES (mirror of the CSS / plane2-3.png geometry) ----
+      var VPy = 0.60;   // vanishing-point / horizon Y (fraction of viewport H)
+      var Y1  = 0.70;   // resting anchor Y — tyres seat here (measured from target)
+      var S0  = 0.05;   // start scale — a tiny dot in the sunrise at the horizon
+      var S1  = 0.62;   // RESTING scale — wings nested in the runway (closer looks bad)
+      var CONTACT = 0.72; // tyre contact line as fraction of element height (measured)
+      var PT  = 0.60;   // PLANE TOUCHDOWN: landing completes here, then it FREEZES
+      var TD  = PT;     // touchdown threshold (smoke burst + wheel spin blur)
+      // Main-gear geometry inside plane2-3.png (fractions of the rendered element width):
+      var GEAR_DX = 0.072; // half-distance between the two main gear from centre
+      var GEAR_W  = 0.06;  // wheel-zone diameter
+
+      var clamp01 = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+      // The descent runs over [0, PT] then locks. Exponential growth: slow while
+      // high & far, rushing in just before touchdown; frozen for p >= PT.
+      var scaleFor = function (p) {
+        var td = clamp01(p / PT);
+        return S0 * Math.pow(S1 / S0, td);
+      };
+      // Perspective lock: screen-Y below the horizon is proportional to scale,
+      // so the aircraft rides the ground plane from the horizon to its resting spot.
+      var anchorFor = function (p) {
+        return VPy + (Y1 - VPy) * ((scaleFor(p) - S0) / (S1 - S0));
+      };
+      var rand = function (a, b) { return a + Math.random() * (b - a); };
+
+      var yr = document.getElementById("yr");
+      if (yr) yr.textContent = new Date().getFullYear();
+
+      // Calibration mode: append ?calibrate=1 to overlay the horizon marker.
+      if (/[?&]calibrate=1/.test(location.search)) document.body.classList.add("calibrate");
+
+      function start() {
+        if (!window.gsap || !window.ScrollTrigger) { return false; }
+        gsap.registerPlugin(ScrollTrigger);
+
+        var wrap  = document.querySelector(".plane-wrap");
+        var inner = document.querySelector(".plane-inner");
+        var planeImg = inner.querySelector("img");
+        var railFill = document.querySelector("#rail .fill");
+        var contactShadow = document.getElementById("contactShadow");
+        var cloudsNear = document.getElementById("cloudsNear");
+        var cloudsFar = document.getElementById("cloudsFar");
+        var wheelL = document.getElementById("wheelBlurL");
+        var wheelR = document.getElementById("wheelBlurR");
+        var smokeLayer = document.getElementById("smokeLayer");
+        // Build the smoke puffs: left gear, right gear, and a centre fill so the
+        // burst reads as one ground-hugging cloud across the whole gear line.
+        var mkPuffs = function (n) {
+          var arr = [];
+          for (var i = 0; i < n; i++) { var d = document.createElement("div"); d.className = "smoke"; smokeLayer.appendChild(d); arr.push(d); }
+          return arr;
+        };
+        var smokeL = mkPuffs(7);
+        var smokeR = mkPuffs(7);
+        var smokeC = mkPuffs(5);
+
+        var H = function () { return window.innerHeight; };
+        var W = function () { return window.innerWidth; };
+        // Pixel offset of the contact point from the element's top.
+        var contactPx = function () { return wrap.offsetHeight * CONTACT; };
+        // Convert a target anchor (fraction of viewport H) to a translateY in px.
+        var yFor = function (anchorFrac) { return anchorFrac * H() - contactPx(); };
+
+        // Build the atmospheric cloud sandwich (distant + foreground wisps).
+        makeClouds(cloudsFar, 6, { minW: 9, maxW: 17, minTop: 6, maxTop: 50, minDur: 70, maxDur: 130 });
+        makeClouds(cloudsNear, 5, { minW: 30, maxW: 58, minTop: 2, maxTop: 52, minDur: 26, maxDur: 52 });
+
+        var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        if (reduce) {
+          // Reduced motion: no scrubbed flight, no looping wobble. The plane
+          // rests calmly at the horizon while content still fades in on scroll.
+          gsap.set(wrap, { scale: S1, y: yFor(Y1), force3D: true });
+          inner.style.setProperty("--tint", "0.2");
+          cloudsNear.style.opacity = "0.3";
+          setupRail(railFill);
+          setupPanels();
+          window.addEventListener("resize", function () { ScrollTrigger.refresh(); });
+          return true;
+        }
+
+        // ------ The single applied-frame function: scale + perspective Y, plus
+        // all the environmental layers (tint, shadow, clouds, wheel-zone fx). ---
+        var lastP = 0;
+        var smokeArmed = true;
+        var wobTl = null;   // turbulence wobble timeline (paused once landed)
+        function applyFlight(p) {
+          var s = scaleFor(p);
+          var anchor = anchorFor(p);
+          gsap.set(wrap, { scale: s, y: yFor(anchor), force3D: true });
+
+          // Warm sunrise backlight — subtle, since the asset already has baked
+          // golden rim lighting. Strongest high in the sky, gone by ~42%.
+          inner.style.setProperty("--tint", (clamp01(1 - p / 0.42) * 0.45).toFixed(3));
+
+          // Foreground clouds clear before touchdown; distant clouds dim near the ground.
+          cloudsNear.style.opacity = clamp01(1 - p / 0.4).toFixed(3);
+          cloudsFar.style.opacity = (0.25 + 0.6 * clamp01(1 - p / 0.7)).toFixed(3);
+
+          // Rendered geometry of the aircraft + main-gear screen coordinates.
+          var pw = inner.offsetWidth * s;          // rendered plane width (px)
+          var cx = W() / 2;
+          var wy = anchor * H();                   // wheel contact line
+          var dx = GEAR_DX * pw;
+          var ww = Math.max(24, GEAR_W * pw);
+
+          // Grounded drop-shadow on the aircraft itself: barely-there while
+          // airborne, then sharpens + tightens beneath the wheels into touchdown.
+          var g = clamp01((p - (PT - 0.08)) / 0.08);  // 0 at PT-8% -> 1 at touchdown
+          var dOff = (12 + 8 * g).toFixed(1);
+          var dBlur = (18 - 6 * g).toFixed(1);  // tightens (less blur) on contact
+          var dAlpha = (0.12 + 0.33 * g).toFixed(3);
+          planeImg.style.filter = "drop-shadow(0 " + dOff + "px " + dBlur + "px rgba(0,0,0," + dAlpha + "))";
+
+          // Ground contact shadow ellipse under the wheels: appears as it nears the
+          // ground, then darkens + tightens right at touchdown.
+          var shFrac = (s - S0) / (S1 - S0);
+          var shOp = clamp01((shFrac - 0.5) / 0.5) * (0.55 + 0.35 * g);
+          var shBlur = 16 - 9 * g;
+          contactShadow.style.width = (pw * 0.40).toFixed(0) + "px";
+          contactShadow.style.height = (pw * 0.07).toFixed(0) + "px";
+          contactShadow.style.left = cx + "px";
+          contactShadow.style.top = (wy + pw * 0.012) + "px";
+          contactShadow.style.opacity = shOp.toFixed(3);
+          contactShadow.style.filter = "blur(" + shBlur.toFixed(1) + "px)";
+
+          // Wheel motion-blur zones: snap to blur(3px) on touchdown, ease to 0
+          // over the short deceleration window just after PT.
+          var k = clamp01((p - TD) / 0.08);        // 0 at touchdown -> 1 just after
+          var blurAmt = p >= TD ? 3 * (1 - k) : 0;
+          var wOp = (p >= TD && k < 1) ? 1 : 0;
+          [[wheelL, cx - dx], [wheelR, cx + dx]].forEach(function (pair) {
+            var el = pair[0];
+            el.style.width = ww + "px";
+            el.style.height = ww + "px";
+            el.style.left = pair[1] + "px";
+            el.style.top = (wy - ww * 0.15) + "px";
+            el.style.opacity = wOp;
+            var b = "blur(" + blurAmt.toFixed(2) + "px)";
+            el.style.backdropFilter = b;
+            el.style.webkitBackdropFilter = b;
+          });
+
+          // Smoke burst — the second the wheels touch the runway (crossing PT down).
+          // Puffs scale with the rendered plane so the cloud hugs the ground and
+          // wraps over the wheels regardless of viewport size.
+          if (p >= TD && lastP < TD && smokeArmed) {
+            fireSmoke(smokeL, cx - dx, wy, -1, pw);
+            fireSmoke(smokeR, cx + dx, wy, 1, pw);
+            fireSmoke(smokeC, cx, wy, 0, pw);
+            smokeArmed = false;
+          }
+          if (p < TD - 0.03) smokeArmed = true;
+
+          // Turbulence wobble only while airborne — a landed plane sits still.
+          var landed = p >= PT - 0.015;
+          if (wobTl) {
+            if (landed && !wobTl.paused()) {
+              wobTl.pause();
+              gsap.to(inner, { rotation: 0, y: 0, duration: 0.5, ease: "power2.out", overwrite: true });
+            } else if (!landed && wobTl.paused()) {
+              gsap.killTweensOf(inner);
+              wobTl.resume();
+            }
+          }
+          lastP = p;
+        }
+
+        // ---------- Master scrubbed proxy (signature inertia) ----------
+        var proxy = { p: 0 };
+        applyFlight(0);
+        gsap.to(proxy, {
+          p: 1, ease: "none",
+          scrollTrigger: {
+            trigger: "#track", start: "top top", end: "bottom bottom",
+            scrub: 1.5, invalidateOnRefresh: true
+          },
+          onUpdate: function () { applyFlight(proxy.p); }
+        });
+
+        // ---------- Independent turbulence wobble (composes on .plane-inner) ----
+        // Built as a pausable timeline so applyFlight can settle it on touchdown.
+        wobTl = gsap.timeline({ repeat: -1, yoyo: true });
+        wobTl.to(inner, { rotation: 3, y: 5, duration: 3.6, ease: "sine.inOut" }, 0);
+        wobTl.to(inner, { rotation: -1.4, duration: 2.4, ease: "sine.inOut" }, 0);
+
+        // ---------- Progress rail + panels ----------
+        setupRail(railFill);
+        setupPanels();
+
+        // Keep ground-fx geometry correct after layout settles / on resize.
+        ScrollTrigger.addEventListener("refreshInit", function () { applyFlight(proxy.p); });
+
+        // Keep everything honest on resize/orientation change.
+        window.addEventListener("resize", function () { ScrollTrigger.refresh(); });
+
+        // Dev/QA hook: ?p=0..1 jumps to a scroll fraction (for calibration shots).
+        var pm = location.search.match(/[?&]p=([0-9.]+)/);
+        if (pm) {
+          var frac = Math.max(0, Math.min(1, parseFloat(pm[1])));
+          ScrollTrigger.refresh();
+          var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+          window.scrollTo(0, frac * maxScroll);
+        }
+
+        return true;
+      }
+
+      // Progress rail tied to the FULL document scroll (cinematic + store).
+      function setupRail(railFill) {
+        if (!railFill) return;
+        var update = function () {
+          var max = document.documentElement.scrollHeight - window.innerHeight;
+          var p = max > 0 ? window.scrollY / max : 0;
+          railFill.style.width = (Math.max(0, Math.min(1, p)) * 100).toFixed(2) + "%";
+        };
+        window.addEventListener("scroll", update, { passive: true });
+        window.addEventListener("resize", update);
+        update();
+      }
+
+      // Spawn a drifting cloud layer. Widths/positions in vw/% for responsiveness.
+      function makeClouds(container, count, opts) {
+        if (!container) return;
+        for (var i = 0; i < count; i++) {
+          var c = document.createElement("div");
+          c.className = "cloud";
+          var w = rand(opts.minW, opts.maxW);
+          c.style.width = w.toFixed(1) + "vw";
+          c.style.height = (w * rand(0.42, 0.62)).toFixed(1) + "vw";
+          c.style.top = rand(opts.minTop, opts.maxTop).toFixed(1) + "%";
+          var dur = rand(opts.minDur, opts.maxDur);
+          c.style.animation = "cloud-cross " + dur.toFixed(1) + "s linear infinite";
+          c.style.animationDelay = (-rand(0, dur)).toFixed(1) + "s";
+          container.appendChild(c);
+        }
+      }
+
+      // One-shot tyre-smoke burst. Puffs are sized to the rendered plane width
+      // (pw) and kept low so the cloud hugs the tarmac and wraps over the wheels.
+      // dir: -1 left gear, +1 right gear, 0 centre fill.
+      function fireSmoke(nodes, x, y, dir, pw) {
+        var base = Math.max(80, pw * 0.16);   // puff diameter scales with plane
+        Array.prototype.forEach.call(nodes, function (el, i) {
+          gsap.killTweensOf(el);
+          var dur = rand(1.3, 2.0);
+          var dly = i * 0.05;
+          var sz = base * rand(0.8, 1.25);
+          el.style.width = sz.toFixed(0) + "px";
+          el.style.height = sz.toFixed(0) + "px";
+          // Spread mostly sideways/along the ground, billow only slightly up.
+          var spread = dir === 0 ? rand(-0.10, 0.10) : dir * rand(0.02, 0.14);
+          gsap.set(el, {
+            xPercent: -50, yPercent: -50,
+            x: x + pw * (dir * 0.015) + rand(-pw * 0.02, pw * 0.02),
+            y: y + rand(-pw * 0.01, pw * 0.03),   // start at/just below the tyre line
+            scale: 0.3, opacity: 0
+          });
+          gsap.to(el, {
+            x: x + pw * spread + rand(-pw * 0.03, pw * 0.03),
+            y: y - rand(pw * 0.02, pw * 0.10),     // drift gently upward off the ground
+            scale: rand(2.2, 3.4),
+            duration: dur,
+            delay: dly,
+            ease: "power2.out"
+          });
+          gsap.to(el, { opacity: rand(0.42, 0.68), duration: 0.16, delay: dly, ease: "power1.out" });
+          gsap.to(el, { opacity: 0, duration: dur * 0.95, delay: dly + 0.22, ease: "power1.in" });
+        });
+      }
+
+      // Panels are driven off the SAME 0..1 scroll progress as the plane, so
+      // their hand-offs stay perfectly in sync with the flight (no track-height
+      // vs scroll-length unit mismatch). Each panel owns an even slice; it fades
+      // in on entry and out on exit. Hero opens already visible; footer holds
+      // through the touchdown.
+      function setupPanels() {
+        // Explicit fade windows by track progress (plane touches down at PT=0.60).
+        // Each: [fadeInStart, fadeInEnd, fadeOutStart, fadeOutEnd].
+        var windows = {
+          hero:   [-1, 0.00, 0.09, 0.17],     // open immediately, clear early
+          paths:  [0.22, 0.32, 0.50, 0.58],   // clears just before touchdown
+          bridge: [0.66, 0.74, 0.94, 1.01]    // appears after the plane has landed
+        };
+
+        var meta = gsap.utils.toArray(".panel").map(function (panel) {
+          var key = panel.getAttribute("data-panel");
+          var w = windows[key] || [-1, 0, 2, 3];
+          return { el: panel, inS: w[0], inE: w[1], outS: w[2], outE: w[3] };
+        });
+
+        var ramp = function (p, a, b) {
+          if (p <= a) return 0;
+          if (p >= b) return 1;
+          return (p - a) / (b - a);
+        };
+
+        var paint = function (p) {
+          for (var i = 0; i < meta.length; i++) {
+            var m = meta[i];
+            var inAmt = ramp(p, m.inS, m.inE);
+            var outAmt = ramp(p, m.outS, m.outE);
+            var op = inAmt * (1 - outAmt);
+            var ty = (1 - inAmt) * 34 + outAmt * -30;
+            m.el.style.opacity = op.toFixed(3);
+            m.el.style.transform = "translateX(-50%) translateY(" + ty.toFixed(1) + "px)";
+            m.el.style.pointerEvents = op > 0.5 ? "auto" : "none";
+          }
+        };
+
+        ScrollTrigger.create({
+          trigger: "#track", start: "top top", end: "bottom bottom", scrub: true,
+          onUpdate: function (self) { paint(self.progress); }
+        });
+        paint(0); // first paint so the hero is up immediately
+      }
+
+      // ---------- The Hangar: render the catalogue + category filter ----------
+      var PRODUCTS = [
+        ["Hawk Balsa Glider", "Gliders", "Beginner", "\u20B9299", "Age 6+"],
+        ["Tow-Line Soarer", "Gliders", "Beginner", "\u20B9399", "Age 8+"],
+        ["Sky-Wind Rubber Plane", "Rubber-powered", "Beginner", "\u20B9449", "Age 8+"],
+        ["Vintage Stick Flyer", "Rubber-powered", "Intermediate", "\u20B9649", "Age 10+"],
+        ["EZ-Flyer RC Trainer", "RC Kits", "Intermediate", "\u20B92,499", "Age 12+"],
+        ["4-Channel Sport RC", "RC Kits", "Pro", "\u20B94,299", "Age 14+"],
+        ["Chopper 3CH Heli", "Drones", "Intermediate", "\u20B92,999", "Age 12+"],
+        ["FPV Racing Drone RTF", "Drones", "Pro", "\u20B96,499", "Age 14+"],
+        ["Balsa & Depron Pack", "Materials", "Beginner", "\u20B9349", "All levels"],
+        ["Builder's Tool Kit", "Materials", "Intermediate", "\u20B9899", "All levels"],
+        ["Brushless Motor + ESC", "Electronics", "Pro", "\u20B91,299", "Spares"],
+        ["LiPo Battery + Servos", "Electronics", "Intermediate", "\u20B91,099", "Spares"],
+        ["Principle-of-Flight Kit", "STEM Kits", "Beginner", "\u20B9599", "Classroom"],
+        ["Drone Science Lab Box", "STEM Kits", "Intermediate", "\u20B91,499", "Classroom"]
+      ];
+      var grid = document.getElementById("hangarGrid");
+      if (grid) {
+        var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); };
+        grid.innerHTML = PRODUCTS.map(function (p) {
+          return '<article class="prod" data-cat="' + p[1] + '">' +
+            '<div class="prod-top"><span class="prod-cat">' + esc(p[1]) + '</span>' +
+            '<span class="lvl ' + p[2] + '">' + p[2] + '</span></div>' +
+            '<h3>' + esc(p[0]) + '</h3>' +
+            '<div class="prod-meta"><span class="prod-price">' + p[3] + '</span>' +
+            '<span class="prod-age">' + esc(p[4]) + '</span></div></article>';
+        }).join("");
+
+        var chips = document.querySelectorAll("#filters .chip");
+        chips.forEach(function (chip) {
+          chip.addEventListener("click", function () {
+            chips.forEach(function (c) { c.classList.remove("is-active"); });
+            chip.classList.add("is-active");
+            var f = chip.getAttribute("data-filter");
+            grid.querySelectorAll(".prod").forEach(function (card) {
+              card.style.display = (f === "all" || card.getAttribute("data-cat") === f) ? "" : "none";
+            });
+          });
+        });
+      }
+
+      // ---------- Intake form tabs ----------
+      function activateTab(key) {
+        document.querySelectorAll("#formTabs .tab").forEach(function (t) {
+          t.classList.toggle("is-active", t.getAttribute("data-tab") === key);
+        });
+        document.querySelectorAll(".intake").forEach(function (f) {
+          f.classList.toggle("is-active", f.getAttribute("data-form") === key);
+        });
+      }
+      document.querySelectorAll("#formTabs .tab").forEach(function (t) {
+        t.addEventListener("click", function () { activateTab(t.getAttribute("data-tab")); });
+      });
+
+      // ---------- The 3 intake forms — front-end confirmation only ----------
+      document.querySelectorAll(".intake").forEach(function (f) {
+        f.addEventListener("submit", function (e) {
+          e.preventDefault();
+          if (!f.checkValidity()) { f.reportValidity(); return; }
+          var ok = f.querySelector(".form-ok");
+          if (ok) ok.classList.add("show");
+          // Keep the success note visible; clear inputs but not the confirmation.
+          var btn = f.querySelector("button[type=submit]");
+          if (btn) { btn.disabled = true; btn.style.opacity = "0.6"; }
+        });
+      });
+
+      // ---------- CTA / path / footer smooth-scroll wiring ----------
+      function trackLen() {
+        var t = document.getElementById("track");
+        return Math.max(1, t.offsetHeight - window.innerHeight);
+      }
+      function goTo(key) {
+        if (key === "paths") {
+          window.scrollTo({ top: 0.27 * trackLen(), behavior: "smooth" });
+          return;
+        }
+        if (key.indexOf("form-") === 0) {
+          activateTab(key.replace("form-", ""));
+          var forms = document.getElementById("forms");
+          if (forms) forms.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+        var el = document.getElementById(key);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      document.querySelectorAll("[data-scroll]").forEach(function (a) {
+        a.addEventListener("click", function (e) {
+          e.preventDefault();
+          goTo(a.getAttribute("data-scroll"));
+        });
+      });
+
+      // GSAP loads with `defer`; wait for window load so the CDN is ready,
+      // and retry briefly in case the network is slow.
+      function boot() {
+        if (start()) return;
+        var tries = 0;
+        var iv = setInterval(function () {
+          tries++;
+          if (start() || tries > 40) clearInterval(iv);
+        }, 100);
+      }
+      if (document.readyState === "complete") boot();
+      else window.addEventListener("load", boot);
+    })();
+  </script>
+</body>
+</html>
