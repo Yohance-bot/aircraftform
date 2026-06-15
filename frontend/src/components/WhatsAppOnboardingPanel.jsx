@@ -8,22 +8,45 @@ import {
   reportOnboardingCancel,
 } from "../api.js";
 
+import { WA_OAUTH_CALLBACK_MESSAGE } from "./WhatsAppOAuthCallback.jsx";
+
 const FINISH_EVENT = "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING";
 const OAUTH_REDIRECT_EVENT = "OAUTH_REDIRECT";
 const CONFIG_ID_FALLBACK = "2349378865592558";
+const OAUTH_CALLBACK_PATH = "/admin/whatsapp-callback";
 /** Meta exchangeable codes expire in ~30s once issued. */
 const COMPLETION_WAIT_MS = 120_000;
-const CODE_POLL_MS = 2_000;
 /** Wait for WA_EMBEDDED_SIGNUP JSON before OAuth-only asset discovery. */
 const EMBEDDED_SIGNUP_WAIT_MS = 8_000;
 
 const LOG_PREFIX = "[WA onboarding]";
 
 const CONFIG_HINT =
-  "Only the Facebook OAuth reconnect screen appeared — WhatsApp Embedded Signup did not launch. " +
-  "In Meta App Dashboard → Facebook Login for Business → Configuration 2349378865592558, " +
-  "verify it is a WhatsApp Embedded Signup config with Business App coexistence enabled " +
-  "(not OAuth-only). Required permissions: whatsapp_business_management, whatsapp_business_messaging.";
+  "If Embedded Signup does not launch, verify Meta configuration 2349378865592558 has Business App coexistence enabled. " +
+  "Also add this exact URL under Facebook Login for Business → Settings → Valid OAuth Redirect URIs: ";
+
+function getOAuthRedirectUri() {
+  if (typeof window === "undefined") return "";
+  return `${window.location.origin}${OAUTH_CALLBACK_PATH}`;
+}
+
+function buildManualOAuthUrl({ appId, configId, graphVersion, state }) {
+  const redirectUri = getOAuthRedirectUri();
+  const extras = JSON.stringify({
+    setup: {},
+    featureType: "whatsapp_business_app_onboarding",
+    sessionInfoVersion: "3",
+  });
+  const params = new URLSearchParams({
+    client_id: appId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    config_id: configId,
+    state,
+    extras,
+  });
+  return `https://www.facebook.com/${graphVersion}/dialog/oauth?${params.toString()}`;
+}
 
 function safeJson(value) {
   try {
@@ -79,32 +102,6 @@ function hasValidSession(sessionData) {
   return isFinishEvent(sessionData.event) || sessionData.event === OAUTH_REDIRECT_EVENT;
 }
 
-function loadFacebookSDK() {
-  return new Promise((resolve, reject) => {
-    if (window.FB) {
-      resolve(window.FB);
-      return;
-    }
-    const existing = document.getElementById("facebook-jssdk");
-    if (existing) {
-      existing.addEventListener("load", () => resolve(window.FB));
-      existing.addEventListener("error", reject);
-      return;
-    }
-    window.fbAsyncInit = function () {
-      resolve(window.FB);
-    };
-    const script = document.createElement("script");
-    script.id = "facebook-jssdk";
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = "anonymous";
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
-    script.onerror = reject;
-    document.body.appendChild(script);
-  });
-}
-
 function isFinishEvent(eventName) {
   return (
     eventName === FINISH_EVENT ||
@@ -114,6 +111,10 @@ function isFinishEvent(eventName) {
 }
 
 function buildRedirectUriHints(meta = {}) {
+  if (meta.redirect_uri) {
+    return [meta.redirect_uri];
+  }
+
   const hints = [];
   const add = (value) => {
     if (value === undefined || value === null) return;
@@ -142,7 +143,6 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   const [connecting, setConnecting] = useState(false);
   const [waitingPhase, setWaitingPhase] = useState("");
   const [error, setError] = useState("");
-  const [sdkReady, setSdkReady] = useState(false);
   const [configHint, setConfigHint] = useState("");
   const [debugLog, setDebugLog] = useState([]);
 
@@ -152,10 +152,11 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   const codeExchangeInFlightRef = useRef(null);
   const completionInFlightRef = useRef(false);
   const waitTimeoutRef = useRef(null);
-  const codePollRef = useRef(null);
   const oauthFallbackRef = useRef(null);
+  const oauthStateRef = useRef(null);
+  const popupRef = useRef(null);
+  const popupPollRef = useRef(null);
   const flowActiveRef = useRef(false);
-  const pollCountRef = useRef(0);
 
   const appendLog = useCallback((step, detail = "", level = "info") => {
     const entry = {
@@ -173,13 +174,13 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       clearTimeout(waitTimeoutRef.current);
       waitTimeoutRef.current = null;
     }
-    if (codePollRef.current) {
-      clearInterval(codePollRef.current);
-      codePollRef.current = null;
-    }
     if (oauthFallbackRef.current) {
       clearTimeout(oauthFallbackRef.current);
       oauthFallbackRef.current = null;
+    }
+    if (popupPollRef.current) {
+      clearInterval(popupPollRef.current);
+      popupPollRef.current = null;
     }
   }, []);
 
@@ -383,23 +384,6 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     [appendLog, exchangeCodeImmediately, failFlow, scheduleOAuthFallback, tryCompleteOnboarding],
   );
 
-  const pollForAuthCode = useCallback(() => {
-    if (!window.FB || !flowActiveRef.current || authCodeRef.current) return;
-
-    window.FB.getLoginStatus((response) => {
-      pollCountRef.current += 1;
-      const code = response?.authResponse?.code;
-      if (code) {
-        appendLog("fb_get_login_status", safeJson(response));
-        captureAuthCode(code, "get_login_status");
-        return;
-      }
-      if (pollCountRef.current <= 2 || response?.status !== "unknown") {
-        appendLog("fb_get_login_status", safeJson(response));
-      }
-    });
-  }, [appendLog, captureAuthCode]);
-
   const startCompletionWait = useCallback(() => {
     clearWaitTimers();
 
@@ -434,36 +418,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
         },
       );
     }, COMPLETION_WAIT_MS);
-
-    codePollRef.current = setInterval(pollForAuthCode, CODE_POLL_MS);
-  }, [appendLog, clearWaitTimers, failFlow, pollForAuthCode]);
-
-  const handleFbLoginResponse = useCallback(
-    (response) => {
-      appendLog("fb_login_callback", safeJson(response));
-
-      const code = response?.authResponse?.code;
-      if (code) {
-        captureAuthCode(code, "fb_login");
-        return;
-      }
-
-      // IMPORTANT: Do NOT treat a missing code as cancellation.
-      // Meta often closes/reopens the popup during reconnect steps and fires
-      // FB.login with status "unknown" before the flow is actually finished.
-      // The OAuth code and FINISH event may arrive asynchronously via postMessage.
-      appendLog(
-        "fb_login_no_code_yet",
-        `status=${response?.status || "unknown"} — waiting for code and/or FINISH event`,
-        "warning",
-      );
-
-      if (flowActiveRef.current) {
-        setFlowState(true, "Popup closed — waiting for Meta…");
-      }
-    },
-    [appendLog, captureAuthCode, setFlowState],
-  );
+  }, [appendLog, clearWaitTimers, failFlow]);
 
   useEffect(() => {
     let cancelled = false;
@@ -479,18 +434,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
         if (cancelled) return;
         setConfig(cfg);
         setStatus(stat);
-
-        await loadFacebookSDK();
-        if (cancelled) return;
-
-        window.FB.init({
-          appId: cfg.app_id,
-          autoLogAppEvents: true,
-          xfbml: true,
-          version: cfg.graph_api_version || "v21.0",
-        });
-        setSdkReady(true);
-        appendLog("sdk_ready", safeJson({ appId: cfg.app_id, version: cfg.graph_api_version }));
+        appendLog("config_ready", safeJson({ appId: cfg.app_id, version: cfg.graph_api_version }));
       } catch (err) {
         if (!cancelled) {
           setError(err?.message || "Failed to initialize WhatsApp onboarding.");
@@ -509,6 +453,28 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
 
   useEffect(() => {
     function handleMessage(event) {
+      if (event.origin === window.location.origin && event.data?.type === WA_OAUTH_CALLBACK_MESSAGE) {
+        const { code, error, error_description: errorDescription, state } = event.data || {};
+        appendLog("oauth_callback_received", safeJson({ hasCode: Boolean(code), error: error || null }));
+
+        if (state && oauthStateRef.current && state !== oauthStateRef.current) {
+          appendLog("oauth_callback_state_mismatch", "", "error");
+          return;
+        }
+
+        if (error) {
+          failFlow(errorDescription || error || "Meta authorization failed.");
+          return;
+        }
+
+        if (code) {
+          captureAuthCode(code, "manual_oauth_callback", {
+            redirect_uri: getOAuthRedirectUri(),
+          });
+        }
+        return;
+      }
+
       if (!event.origin.endsWith("facebook.com")) return;
 
       const raw = event.data;
@@ -518,15 +484,10 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       appendLog("postmessage_parsed", safeJson({ format, payload }));
 
       if (format === "querystring") {
-        appendLog("postmessage_accepted", "oauth_querystring_callback");
-        if (payload.code) {
-          captureAuthCode(payload.code, "postmessage_querystring", {
-            origin: payload.origin,
-            domain: payload.domain,
-          });
-        } else {
-          appendLog("postmessage_rejected", "querystring without code field", "warning");
-        }
+        appendLog(
+          "postmessage_querystring_ignored",
+          "OAuth code is delivered via /admin/whatsapp-callback redirect",
+        );
         return;
       }
 
@@ -603,37 +564,61 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   }, [clearWaitTimers]);
 
   function handleConnect() {
-    if (!sdkReady || !window.FB) {
-      setError("Facebook SDK is not ready yet. Please wait and try again.");
+    if (!config?.app_id) {
+      setError("WhatsApp onboarding config is not loaded yet.");
       return;
     }
 
     clearWaitTimers();
     flowActiveRef.current = true;
     completionInFlightRef.current = false;
-    pollCountRef.current = 0;
     sessionDataRef.current = null;
     authCodeRef.current = null;
     stagingSessionIdRef.current = null;
+    oauthStateRef.current = crypto.randomUUID();
     setError("");
-    setConfigHint("");
+    setConfigHint(`${CONFIG_HINT}${getOAuthRedirectUri()}`);
     setFlowState(true, "Opening Embedded Signup…");
-    appendLog("connect_clicked", safeJson({ config_id: config?.config_id || CONFIG_ID_FALLBACK }));
 
     const configId = config?.config_id || CONFIG_ID_FALLBACK;
+    const oauthUrl = buildManualOAuthUrl({
+      appId: config.app_id,
+      configId,
+      graphVersion: config.graph_api_version || "v21.0",
+      state: oauthStateRef.current,
+    });
+
+    appendLog("connect_clicked", safeJson({ config_id: configId, oauth_url: oauthUrl }));
 
     startCompletionWait();
 
-    window.FB.login(handleFbLoginResponse, {
-      config_id: configId,
-      response_type: "code",
-      override_default_response_type: true,
-      extras: {
-        setup: {},
-        featureType: "whatsapp_business_app_onboarding",
-        sessionInfoVersion: "3",
-      },
-    });
+    const popup = window.open(
+      oauthUrl,
+      "wa_embedded_signup",
+      "width=600,height=700,scrollbars=yes,resizable=yes",
+    );
+
+    if (!popup) {
+      failFlow("Popup blocked. Allow popups for this site and try again.");
+      return;
+    }
+
+    popupRef.current = popup;
+    popupPollRef.current = setInterval(() => {
+      if (!popup.closed) return;
+      clearInterval(popupPollRef.current);
+      popupPollRef.current = null;
+      popupRef.current = null;
+
+      if (!authCodeRef.current && flowActiveRef.current) {
+        appendLog("popup_closed_no_code", "", "warning");
+        window.setTimeout(() => {
+          if (flowActiveRef.current && !authCodeRef.current) {
+            failFlow("WhatsApp authorization window was closed before completing.");
+          }
+        }, 1500);
+      }
+    }, 500);
   }
 
   if (loading) {
@@ -690,7 +675,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
           <button
             type="button"
             onClick={handleConnect}
-            disabled={connecting || !sdkReady}
+            disabled={connecting || !config?.app_id}
             className="inline-flex items-center rounded-xl bg-[#1877f2] hover:bg-[#166fe5] disabled:opacity-60 text-white font-semibold px-6 py-3 text-sm transition-colors"
           >
             {connecting ? "Connecting…" : "Connect WhatsApp Business App"}

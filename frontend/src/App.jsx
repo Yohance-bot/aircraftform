@@ -3,6 +3,7 @@ import { Routes, Route, Link } from "react-router-dom";
 import RegistrationForm from "./components/RegistrationForm.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import PrestigeWhiteMeadowsForm from "./components/PrestigeWhiteMeadowsForm.jsx";
+import WhatsAppOAuthCallback from "./components/WhatsAppOAuthCallback.jsx";
 
 function Shell({ children, societyName = "Palm Meadows Aeromodelling Camp" }) {
   return (
@@ -44,6 +45,14 @@ export default function App() {
         element={
           <Shell>
             <AdminDashboard />
+          </Shell>
+        }
+      />
+      <Route
+        path="/admin/whatsapp-callback"
+        element={
+          <Shell>
+            <WhatsAppOAuthCallback />
           </Shell>
         }
       />
