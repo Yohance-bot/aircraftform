@@ -61,6 +61,7 @@ class CompleteOnboardingIn(BaseModel):
 
 class ExchangeCodeIn(BaseModel):
     code: str = Field(..., min_length=1)
+    redirect_uri: str | None = None
 
 
 class ExchangeCodeOut(BaseModel):
@@ -131,9 +132,13 @@ async def onboarding_exchange_code(
     payload: ExchangeCodeIn,
     db: Session = Depends(get_db),
 ) -> ExchangeCodeOut:
-    logger.info("POST /api/onboarding/exchange-code: code_len=%s", len(payload.code.strip()))
+    logger.info(
+        "POST /api/onboarding/exchange-code: code_len=%s redirect_uri=%s",
+        len(payload.code.strip()),
+        payload.redirect_uri or "(none)",
+    )
     try:
-        session = await stage_code_exchange(db, payload.code.strip())
+        session = await stage_code_exchange(db, payload.code.strip(), payload.redirect_uri)
     except OnboardingError as exc:
         logger.error("Code exchange failed: %s (%s)", exc.message, exc.code)
         raise HTTPException(

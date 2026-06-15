@@ -114,7 +114,7 @@ async def _graph_post(path: str, token: str, payload: dict | None = None) -> dic
         return {"raw": response.text}
 
 
-async def exchange_code_for_token(code: str) -> tuple[str, dict[str, Any]]:
+async def exchange_code_for_token(code: str, redirect_uri: str | None = None) -> tuple[str, dict[str, Any]]:
     """Exchange the Embedded Signup code for a business-scoped access token."""
     if not META_APP_ID or not META_APP_SECRET:
         raise OnboardingError(
@@ -128,6 +128,15 @@ async def exchange_code_for_token(code: str) -> tuple[str, dict[str, Any]]:
         "client_secret": META_APP_SECRET,
         "code": code,
     }
+    if redirect_uri:
+        params["redirect_uri"] = redirect_uri
+
+    logger.info(
+        "Exchanging code: app_id=%s redirect_uri=%s code_len=%d",
+        META_APP_ID,
+        redirect_uri or "(none)",
+        len(code),
+    )
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.get(_graph_url("oauth/access_token"), params=params)
 
@@ -312,13 +321,15 @@ def create_session(
     return session
 
 
-async def stage_code_exchange(db: Session, code: str) -> WhatsAppOnboardingSession:
+async def stage_code_exchange(
+    db: Session, code: str, redirect_uri: str | None = None
+) -> WhatsAppOnboardingSession:
     """Exchange OAuth code immediately and stage the token for later completion."""
     session = create_session(db, event_type="code_staged")
-    _append_step(session, "exchanging_token_immediately")
+    _append_step(session, "exchanging_token_immediately", detail=f"redirect_uri={redirect_uri or '(none)'}")
     db.commit()
     try:
-        access_token, token_meta = await exchange_code_for_token(code)
+        access_token, token_meta = await exchange_code_for_token(code, redirect_uri)
     except OnboardingError:
         session.status = "failed"
         _append_step(session, "token_exchange_failed", level="error")
@@ -342,6 +353,7 @@ async def _resolve_access_token(
     code: str | None,
     staging_session_id: int | None,
     ob_session: WhatsAppOnboardingSession,
+    redirect_uri: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     if staging_session_id:
         staged = db.get(WhatsAppOnboardingSession, staging_session_id)
@@ -366,7 +378,7 @@ async def _resolve_access_token(
             status_code=400,
         )
 
-    return await exchange_code_for_token(code)
+    return await exchange_code_for_token(code, redirect_uri)
 
 
 def record_cancellation(

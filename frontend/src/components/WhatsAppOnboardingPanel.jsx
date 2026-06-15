@@ -320,10 +320,14 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       }
 
       const promise = (async () => {
-        appendLog("exchange_code_start", `source=${source} length=${code.length}`);
+        const redirectUri = window.location.origin;
+        appendLog("exchange_code_start", `source=${source} length=${code.length} redirect_uri=${redirectUri}`);
         setFlowState(true, "Exchanging authorization code…");
         try {
-          const result = await exchangeOnboardingCode(adminKey, { code });
+          const result = await exchangeOnboardingCode(adminKey, {
+            code,
+            redirect_uri: redirectUri,
+          });
           stagingSessionIdRef.current = result.staging_session_id;
           appendLog("exchange_code_success", safeJson(result));
           return result;
