@@ -47,6 +47,7 @@ class CompleteOnboardingIn(BaseModel):
     code: str = Field(..., min_length=1)
     session_data: dict[str, Any]
     session_id: int | None = None
+    discover_assets: bool = False
 
 
 class CancelOnboardingIn(BaseModel):
@@ -115,11 +116,12 @@ async def onboarding_complete(
     session_event = payload.session_data.get("event")
     inner = payload.session_data.get("data") or {}
     logger.info(
-        "POST /api/onboarding/complete: event=%s waba_id=%s phone_number_id=%s code_len=%s",
+        "POST /api/onboarding/complete: event=%s waba_id=%s phone_number_id=%s code_len=%s discover_assets=%s",
         session_event,
         inner.get("waba_id"),
         inner.get("phone_number_id"),
         len(payload.code.strip()),
+        payload.discover_assets,
     )
     try:
         await complete_onboarding(
@@ -127,6 +129,7 @@ async def onboarding_complete(
             code=payload.code.strip(),
             session_data=payload.session_data,
             existing_session_id=payload.session_id,
+            discover_assets=payload.discover_assets,
         )
     except OnboardingError as exc:
         logger.error("Onboarding failed: %s (%s)", exc.message, exc.code)

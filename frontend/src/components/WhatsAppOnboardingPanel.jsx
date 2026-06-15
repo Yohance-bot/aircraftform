@@ -8,12 +8,21 @@ import {
 } from "../api.js";
 
 const FINISH_EVENT = "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING";
+const OAUTH_REDIRECT_EVENT = "OAUTH_REDIRECT";
 const CONFIG_ID_FALLBACK = "2349378865592558";
-/** Meta exchangeable codes expire in ~30s — wait window must stay under that once code arrives. */
+/** Meta exchangeable codes expire in ~30s once issued. */
 const COMPLETION_WAIT_MS = 120_000;
 const CODE_POLL_MS = 2_000;
+/** Wait for WA_EMBEDDED_SIGNUP JSON before OAuth-only asset discovery. */
+const EMBEDDED_SIGNUP_WAIT_MS = 20_000;
 
 const LOG_PREFIX = "[WA onboarding]";
+
+const CONFIG_HINT =
+  "Only the Facebook OAuth reconnect screen appeared — WhatsApp Embedded Signup did not launch. " +
+  "In Meta App Dashboard → Facebook Login for Business → Configuration 2349378865592558, " +
+  "verify it is a WhatsApp Embedded Signup config with Business App coexistence enabled " +
+  "(not OAuth-only). Required permissions: whatsapp_business_management, whatsapp_business_messaging.";
 
 function safeJson(value) {
   try {
@@ -21,6 +30,52 @@ function safeJson(value) {
   } catch {
     return String(value);
   }
+}
+
+/**
+ * Meta delivers postMessage payloads in multiple formats:
+ *  - JSON strings: WA_EMBEDDED_SIGNUP session events
+ *  - URL-encoded query strings: OAuth SDK callback (contains code=)
+ *  - Plain objects: rare SDK variants
+ */
+function parsePostMessagePayload(raw) {
+  if (raw == null) {
+    return { format: "empty", payload: null };
+  }
+  if (typeof raw === "object") {
+    return { format: "object", payload: raw };
+  }
+  if (typeof raw !== "string") {
+    return { format: "unknown", payload: raw };
+  }
+
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { format: "empty", payload: null };
+  }
+
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      return { format: "json", payload: JSON.parse(trimmed) };
+    } catch {
+      return { format: "unparsed_json", payload: trimmed };
+    }
+  }
+
+  if (trimmed.includes("=")) {
+    const params = new URLSearchParams(trimmed);
+    const payload = Object.fromEntries(params.entries());
+    if (Object.keys(payload).length > 0) {
+      return { format: "querystring", payload };
+    }
+  }
+
+  return { format: "unparsed_text", payload: trimmed };
+}
+
+function hasValidSession(sessionData) {
+  if (!sessionData) return false;
+  return isFinishEvent(sessionData.event) || sessionData.event === OAUTH_REDIRECT_EVENT;
 }
 
 function loadFacebookSDK() {
@@ -71,6 +126,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   const [waitingPhase, setWaitingPhase] = useState("");
   const [error, setError] = useState("");
   const [sdkReady, setSdkReady] = useState(false);
+  const [configHint, setConfigHint] = useState("");
   const [debugLog, setDebugLog] = useState([]);
 
   const sessionDataRef = useRef(null);
@@ -78,7 +134,9 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   const completionInFlightRef = useRef(false);
   const waitTimeoutRef = useRef(null);
   const codePollRef = useRef(null);
+  const oauthFallbackRef = useRef(null);
   const flowActiveRef = useRef(false);
+  const pollCountRef = useRef(0);
 
   const appendLog = useCallback((step, detail = "", level = "info") => {
     const entry = {
@@ -99,6 +157,10 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     if (codePollRef.current) {
       clearInterval(codePollRef.current);
       codePollRef.current = null;
+    }
+    if (oauthFallbackRef.current) {
+      clearTimeout(oauthFallbackRef.current);
+      oauthFallbackRef.current = null;
     }
   }, []);
 
@@ -144,8 +206,9 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   const tryCompleteOnboarding = useCallback(async () => {
     const sessionData = sessionDataRef.current;
     const code = authCodeRef.current;
-    const hasSession = Boolean(sessionData && isFinishEvent(sessionData.event));
+    const hasSession = hasValidSession(sessionData);
     const hasCode = Boolean(code);
+    const discoverAssets = sessionData?.event === OAUTH_REDIRECT_EVENT;
 
     appendLog(
       "try_complete",
@@ -155,6 +218,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
         sessionEvent: sessionData?.event || null,
         codeLength: code ? code.length : 0,
         inFlight: completionInFlightRef.current,
+        discoverAssets,
       }),
     );
 
@@ -166,6 +230,9 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
           ? "FINISH session event"
           : "OAuth code";
         setFlowState(true, `Waiting for ${missing}…`);
+        if (hasCode && !hasSession) {
+          setConfigHint(CONFIG_HINT);
+        }
       }
       return;
     }
@@ -177,15 +244,17 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
 
     completionInFlightRef.current = true;
     clearWaitTimers();
-    setFlowState(true, "Exchanging token with server…");
+    setConfigHint("");
+    setFlowState(true, discoverAssets ? "Discovering WhatsApp assets from token…" : "Exchanging token with server…");
     setError("");
 
-    appendLog("post_complete_start", safeJson({ event: sessionData.event }));
+    appendLog("post_complete_start", safeJson({ event: sessionData.event, discoverAssets }));
 
     try {
       const result = await completeOnboarding(adminKey, {
         code,
         session_data: sessionData,
+        discover_assets: discoverAssets,
       });
       appendLog("post_complete_success", safeJson({ connected: result.connected }));
       setStatus(result);
@@ -193,6 +262,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       sessionDataRef.current = null;
       flowActiveRef.current = false;
       setError("");
+      setConfigHint("");
     } catch (err) {
       appendLog("post_complete_error", err?.message || "unknown", "error");
       setError(err?.message || "Onboarding failed.");
@@ -204,20 +274,58 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     }
   }, [adminKey, appendLog, clearWaitTimers, refreshStatus, setFlowState]);
 
+  const scheduleOAuthFallback = useCallback(() => {
+    if (oauthFallbackRef.current) return;
+    if (!authCodeRef.current || hasValidSession(sessionDataRef.current)) return;
+
+    oauthFallbackRef.current = setTimeout(() => {
+      oauthFallbackRef.current = null;
+      if (!flowActiveRef.current || !authCodeRef.current) return;
+      if (hasValidSession(sessionDataRef.current)) return;
+
+      appendLog(
+        "oauth_fallback_triggered",
+        "No WA_EMBEDDED_SIGNUP FINISH after OAuth — trying asset discovery",
+        "warning",
+      );
+      setConfigHint(CONFIG_HINT);
+
+      sessionDataRef.current = {
+        type: "WA_EMBEDDED_SIGNUP",
+        event: OAUTH_REDIRECT_EVENT,
+        data: { source: "oauth_without_embedded_signup_ui" },
+      };
+      tryCompleteOnboarding();
+    }, EMBEDDED_SIGNUP_WAIT_MS);
+  }, [appendLog, tryCompleteOnboarding]);
+
+  const captureAuthCode = useCallback(
+    (code, source) => {
+      if (!code || authCodeRef.current) return;
+      authCodeRef.current = code;
+      appendLog(`code_from_${source}`, `length=${code.length}`);
+      scheduleOAuthFallback();
+      tryCompleteOnboarding();
+    },
+    [appendLog, scheduleOAuthFallback, tryCompleteOnboarding],
+  );
+
   const pollForAuthCode = useCallback(() => {
     if (!window.FB || !flowActiveRef.current || authCodeRef.current) return;
 
     window.FB.getLoginStatus((response) => {
-      appendLog("fb_get_login_status", safeJson(response));
-
+      pollCountRef.current += 1;
       const code = response?.authResponse?.code;
       if (code) {
-        authCodeRef.current = code;
-        appendLog("code_from_get_login_status", `length=${code.length}`);
-        tryCompleteOnboarding();
+        appendLog("fb_get_login_status", safeJson(response));
+        captureAuthCode(code, "get_login_status");
+        return;
+      }
+      if (pollCountRef.current <= 2 || response?.status !== "unknown") {
+        appendLog("fb_get_login_status", safeJson(response));
       }
     });
-  }, [appendLog, tryCompleteOnboarding]);
+  }, [appendLog, captureAuthCode]);
 
   const startCompletionWait = useCallback(() => {
     clearWaitTimers();
@@ -225,9 +333,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     waitTimeoutRef.current = setTimeout(() => {
       if (!flowActiveRef.current) return;
 
-      const hasSession = Boolean(
-        sessionDataRef.current && isFinishEvent(sessionDataRef.current.event),
-      );
+      const hasSession = hasValidSession(sessionDataRef.current);
       const hasCode = Boolean(authCodeRef.current);
 
       appendLog(
@@ -240,7 +346,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
         hasSession && !hasCode
           ? "Embedded Signup finished but no OAuth code arrived. Close any popup blockers and try again."
           : !hasSession && hasCode
-          ? "OAuth code received but Embedded Signup session data never arrived. Try again."
+          ? "OAuth succeeded but WhatsApp Embedded Signup never launched. Check Meta configuration 2349378865592558 supports Business App coexistence."
           : "WhatsApp setup timed out waiting for Meta. Please try again.",
         {
           error_message: "Completion wait timed out",
@@ -265,9 +371,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
 
       const code = response?.authResponse?.code;
       if (code) {
-        authCodeRef.current = code;
-        appendLog("code_from_fb_login", `length=${code.length}`);
-        tryCompleteOnboarding();
+        captureAuthCode(code, "fb_login");
         return;
       }
 
@@ -285,7 +389,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
         setFlowState(true, "Popup closed — waiting for Meta…");
       }
     },
-    [appendLog, setFlowState, tryCompleteOnboarding],
+    [appendLog, captureAuthCode, setFlowState],
   );
 
   useEffect(() => {
@@ -334,55 +438,89 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     function handleMessage(event) {
       if (!event.origin.endsWith("facebook.com")) return;
 
-      let data;
-      try {
-        data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-      } catch {
-        appendLog("postmessage_unparsed", safeJson({ origin: event.origin, raw: event.data }));
+      const raw = event.data;
+      appendLog("postmessage_received", safeJson({ origin: event.origin, rawType: typeof raw }));
+
+      const { format, payload } = parsePostMessagePayload(raw);
+      appendLog("postmessage_parsed", safeJson({ format, payload }));
+
+      if (format === "querystring") {
+        appendLog("postmessage_accepted", "oauth_querystring_callback");
+        if (payload.code) {
+          captureAuthCode(payload.code, "postmessage_querystring");
+        } else {
+          appendLog("postmessage_rejected", "querystring without code field", "warning");
+        }
         return;
       }
 
-      appendLog("postmessage_raw", safeJson({ origin: event.origin, data }));
+      if (format === "json" || format === "object") {
+        const data = payload;
+        if (!data || data.type !== "WA_EMBEDDED_SIGNUP") {
+          appendLog(
+            "postmessage_rejected",
+            safeJson({ reason: "not WA_EMBEDDED_SIGNUP", type: data?.type || null }),
+            "warning",
+          );
+          return;
+        }
 
-      if (!data || data.type !== "WA_EMBEDDED_SIGNUP") return;
+        appendLog("postmessage_accepted", safeJson({ event: data.event, type: data.type }));
 
-      appendLog("wa_embedded_signup", safeJson(data));
+        if (data.event === "CANCEL" || data.event === "ERROR") {
+          const inner = data.data || {};
+          failFlow(
+            inner.error_message ||
+              (inner.current_step
+                ? `Setup cancelled at step: ${inner.current_step}`
+                : "WhatsApp setup was cancelled."),
+            {
+              current_step: inner.current_step,
+              error_code: inner.error_code,
+              error_message: inner.error_message,
+              meta_session_id: inner.session_id,
+              session_data: data,
+            },
+          );
+          return;
+        }
 
-      if (data.event === "CANCEL" || data.event === "ERROR") {
-        const inner = data.data || {};
-        failFlow(
-          inner.error_message ||
-            (inner.current_step
-              ? `Setup cancelled at step: ${inner.current_step}`
-              : "WhatsApp setup was cancelled."),
-          {
-            current_step: inner.current_step,
-            error_code: inner.error_code,
-            error_message: inner.error_message,
-            meta_session_id: inner.session_id,
-            session_data: data,
-          },
+        if (isFinishEvent(data.event)) {
+          sessionDataRef.current = data;
+          setConfigHint("");
+
+          const embeddedCode = extractCodeFromSession(data);
+          if (embeddedCode) {
+            captureAuthCode(embeddedCode, "session_event");
+          }
+
+          appendLog("finish_event_received", data.event);
+          if (oauthFallbackRef.current) {
+            clearTimeout(oauthFallbackRef.current);
+            oauthFallbackRef.current = null;
+          }
+          tryCompleteOnboarding();
+          return;
+        }
+
+        appendLog(
+          "postmessage_rejected",
+          safeJson({ reason: "unhandled WA_EMBEDDED_SIGNUP event", event: data.event }),
+          "warning",
         );
         return;
       }
 
-      if (isFinishEvent(data.event)) {
-        sessionDataRef.current = data;
-
-        const embeddedCode = extractCodeFromSession(data);
-        if (embeddedCode && !authCodeRef.current) {
-          authCodeRef.current = embeddedCode;
-          appendLog("code_from_session_event", `length=${embeddedCode.length}`);
-        }
-
-        appendLog("finish_event_received", data.event);
-        tryCompleteOnboarding();
-      }
+      appendLog(
+        "postmessage_rejected",
+        safeJson({ reason: `unsupported format: ${format}`, sample: String(payload).slice(0, 200) }),
+        "warning",
+      );
     }
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [appendLog, failFlow, tryCompleteOnboarding]);
+  }, [appendLog, captureAuthCode, clearWaitTimers, failFlow, tryCompleteOnboarding]);
 
   useEffect(() => {
     return () => clearWaitTimers();
@@ -397,9 +535,11 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     clearWaitTimers();
     flowActiveRef.current = true;
     completionInFlightRef.current = false;
+    pollCountRef.current = 0;
     sessionDataRef.current = null;
     authCodeRef.current = null;
     setError("");
+    setConfigHint("");
     setFlowState(true, "Opening Embedded Signup…");
     appendLog("connect_clicked", safeJson({ config_id: config?.config_id || CONFIG_ID_FALLBACK }));
 
@@ -451,6 +591,12 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       {waitingPhase && connecting && (
         <div className="mt-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3">
           {waitingPhase}
+        </div>
+      )}
+
+      {configHint && (
+        <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3">
+          {configHint}
         </div>
       )}
 

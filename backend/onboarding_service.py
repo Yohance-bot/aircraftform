@@ -41,6 +41,14 @@ _ACCEPTED_FINISH_EVENTS = {
     "FINISH_ONLY_WABA",
 }
 
+# OAuth succeeded but Embedded Signup never emitted WA_EMBEDDED_SIGNUP JSON.
+OAUTH_REDIRECT_EVENT = "OAUTH_REDIRECT"
+
+_WHATSAPP_SCOPES = {
+    "whatsapp_business_management",
+    "whatsapp_business_messaging",
+}
+
 
 def _is_valid_finish_event(event: str) -> bool:
     return event in _ACCEPTED_FINISH_EVENTS
@@ -178,6 +186,83 @@ async def verify_coexistence_status(phone_number_id: str, token: str) -> dict[st
     )
 
 
+async def discover_assets_from_token(access_token: str) -> dict[str, Any]:
+    """Discover shared WABA + coexistence phone from token debug granular scopes.
+
+    Used when Facebook Login returns an OAuth code but Embedded Signup never
+    emits a WA_EMBEDDED_SIGNUP FINISH event (misconfigured Login for Business
+    configuration or OAuth-only reconnect flow).
+    """
+    if not META_APP_ID or not META_APP_SECRET:
+        raise OnboardingError(
+            "META_APP_ID and META_APP_SECRET must be configured.",
+            code="missing_app_credentials",
+            status_code=500,
+        )
+
+    app_access_token = f"{META_APP_ID}|{META_APP_SECRET}"
+    debug = await _graph_get(
+        "debug_token",
+        app_access_token,
+        params={"input_token": access_token},
+    )
+    token_data = debug.get("data") or {}
+    logger.info(
+        "debug_token: is_valid=%s scopes=%s",
+        token_data.get("is_valid"),
+        [s.get("scope") for s in token_data.get("granular_scopes") or []],
+    )
+
+    waba_ids: list[str] = []
+    for scope_entry in token_data.get("granular_scopes") or []:
+        scope_name = scope_entry.get("scope", "")
+        if scope_name in _WHATSAPP_SCOPES:
+            for target_id in scope_entry.get("target_ids") or []:
+                if target_id and str(target_id) not in waba_ids:
+                    waba_ids.append(str(target_id))
+
+    if not waba_ids:
+        raise OnboardingError(
+            "OAuth succeeded but no WhatsApp Business Account was shared. "
+            "Your Facebook Login for Business configuration (ID "
+            f"{META_CONFIG_ID}) likely does not include WhatsApp Business App "
+            "coexistence onboarding. In Meta App Dashboard → Facebook Login for "
+            "Business → Configurations, ensure the config uses WhatsApp Embedded "
+            "Signup with Business App coexistence enabled — not OAuth reconnect only.",
+            code="no_waba_in_token",
+            status_code=400,
+        )
+
+    for waba_id in waba_ids:
+        numbers = await _graph_get(f"{waba_id}/phone_numbers", access_token)
+        for entry in numbers.get("data") or []:
+            phone_number_id = str(entry.get("id") or "")
+            if not phone_number_id:
+                continue
+            phone_info = await verify_coexistence_status(phone_number_id, access_token)
+            if phone_info.get("is_on_biz_app") and phone_info.get("platform_type") == "CLOUD_API":
+                logger.info(
+                    "discovered coexistence phone: waba_id=%s phone_number_id=%s",
+                    waba_id,
+                    phone_number_id,
+                )
+                return {
+                    "waba_id": waba_id,
+                    "phone_number_id": phone_number_id,
+                    "business_id": None,
+                    "phone_info": phone_info,
+                    "debug_token": token_data,
+                }
+
+    raise OnboardingError(
+        "WhatsApp accounts were shared but none are in Business App coexistence mode "
+        "(is_on_biz_app=true, platform_type=CLOUD_API). Complete the WhatsApp Business "
+        "App onboarding screens in Embedded Signup, not just the OAuth reconnect step.",
+        code="no_coexistence_phone",
+        status_code=400,
+    )
+
+
 def check_onboarding_conflict(db: Session, waba_id: str) -> WhatsAppAccount | None:
     """Return the active account if it conflicts with a new WABA."""
     active = (
@@ -269,10 +354,135 @@ async def complete_onboarding(
     code: str,
     session_data: dict[str, Any],
     existing_session_id: int | None = None,
+    discover_assets: bool = False,
 ) -> WhatsAppAccount:
     """Run the full coexistence onboarding pipeline."""
     event = session_data.get("event", "")
     inner = session_data.get("data") or session_data
+    oauth_only = event == OAUTH_REDIRECT_EVENT or discover_assets
+
+    if oauth_only:
+        ob_session = (
+            db.get(WhatsAppOnboardingSession, existing_session_id)
+            if existing_session_id
+            else None
+        )
+        if not ob_session:
+            ob_session = create_session(db, event_type=OAUTH_REDIRECT_EVENT)
+        _append_step(
+            ob_session,
+            "oauth_redirect_path",
+            detail="No WA_EMBEDDED_SIGNUP FINISH — discovering assets from token",
+            level="warning",
+        )
+        db.commit()
+
+        _append_step(ob_session, "exchanging_token")
+        db.commit()
+        try:
+            access_token, token_meta = await exchange_code_for_token(code)
+        except OnboardingError:
+            ob_session.status = "failed"
+            _append_step(ob_session, "token_exchange_failed", level="error")
+            db.commit()
+            raise
+
+        _append_step(ob_session, "discovering_assets_from_token")
+        db.commit()
+        try:
+            discovered = await discover_assets_from_token(access_token)
+        except OnboardingError:
+            ob_session.status = "failed"
+            _append_step(ob_session, "asset_discovery_failed", level="error")
+            db.commit()
+            raise
+
+        waba_id = discovered["waba_id"]
+        phone_number_id = discovered["phone_number_id"]
+        business_id = discovered.get("business_id")
+        phone_info = discovered.get("phone_info") or {}
+
+        check_onboarding_conflict(db, waba_id)
+        existing = (
+            db.query(WhatsAppAccount)
+            .filter(WhatsAppAccount.waba_id == waba_id)
+            .first()
+        )
+        if existing:
+            account = existing
+            account.access_token = access_token
+            account.phone_number_id = phone_number_id
+            account.business_id = business_id
+            account.onboarding_status = "token_exchanged"
+            account.sync_status = "skipped"
+            account.updated_at = datetime.utcnow()
+        else:
+            account = WhatsAppAccount(
+                waba_id=waba_id,
+                phone_number_id=phone_number_id,
+                business_id=business_id,
+                access_token=access_token,
+                coexistence_enabled=True,
+                onboarding_status="token_exchanged",
+                sync_status="skipped",
+                raw_business_info=json.dumps(
+                    {"token_meta": token_meta, "discovered": discovered, "oauth_only": True}
+                ),
+            )
+            db.add(account)
+
+        db.commit()
+        db.refresh(account)
+        ob_session.whatsapp_account_id = account.id
+        ob_session.waba_id = waba_id
+        ob_session.phone_number_id = phone_number_id
+        ob_session.business_id = business_id
+        ob_session.status = "code_received"
+        _append_step(ob_session, "token_exchanged")
+        _append_step(ob_session, "assets_discovered", detail=json.dumps(discovered)[:500])
+        db.commit()
+
+        _append_step(ob_session, "subscribing_webhooks")
+        db.commit()
+        try:
+            await subscribe_waba(waba_id, access_token)
+        except OnboardingError:
+            account.onboarding_status = "failed"
+            ob_session.status = "failed"
+            _append_step(ob_session, "webhook_subscribe_failed", level="error")
+            db.commit()
+            raise
+
+        account.webhook_subscribed = True
+        account.onboarding_status = "subscribed"
+        account.is_on_biz_app = bool(phone_info.get("is_on_biz_app"))
+        account.platform_type = phone_info.get("platform_type")
+        account.display_phone_number = phone_info.get("display_phone_number")
+        account.verified_name = phone_info.get("verified_name")
+        _append_step(ob_session, "webhooks_subscribed")
+        _append_step(ob_session, "skipped_phone_registration", detail="coexistence")
+        _append_step(ob_session, "coexistence_verified", detail=json.dumps(phone_info)[:300])
+        db.commit()
+
+        db.query(WhatsAppAccount).filter(
+            WhatsAppAccount.id != account.id,
+            WhatsAppAccount.is_active.is_(True),
+        ).update({"is_active": False, "updated_at": datetime.utcnow()})
+
+        account.is_active = True
+        account.onboarding_status = "active"
+        account.updated_at = datetime.utcnow()
+        ob_session.status = "completed"
+        ob_session.completed_at = datetime.utcnow()
+        _append_step(ob_session, "onboarding_complete")
+        db.commit()
+        db.refresh(account)
+        logger.info(
+            "OAuth-only coexistence onboarding complete: waba_id=%s phone_number_id=%s",
+            account.waba_id,
+            account.phone_number_id,
+        )
+        return account
 
     if not _is_valid_finish_event(event):
         raise OnboardingError(

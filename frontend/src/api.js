@@ -398,6 +398,7 @@ export async function completeOnboarding(adminKey, payload) {
     event: payload?.session_data?.event,
     waba_id: payload?.session_data?.data?.waba_id,
     codeLength: payload?.code?.length,
+    discover_assets: payload?.discover_assets,
   });
   const res = await fetch(apiUrl("/api/onboarding/complete"), {
     method: "POST",
