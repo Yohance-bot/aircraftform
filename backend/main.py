@@ -25,6 +25,7 @@ from bot_router import router as bot_router
 ADMIN_KEY = os.getenv("ADMIN_KEY", "change-me-before-deploy")
 
 AgeGroup = Literal["6-9 years", "10-14 years"]
+PrestigeAgeGroup = Literal["Age 5-8", "Age 9-14"]
 PWM_VALID_TIMING_SLOTS = {"10 AM - 12 PM"}
 
 app = FastAPI(title="AMC Registration API", version="1.0.0")
@@ -114,7 +115,7 @@ class PrestigeRegistrationIn(BaseModel):
     phone: str = Field(..., min_length=1, max_length=50)
     email: str | None = Field(default=None, max_length=200)
     timing_slot: str = Field(..., min_length=1, max_length=50)
-    age_group: AgeGroup
+    age_group: PrestigeAgeGroup
     class_grade: str = Field(..., min_length=1, max_length=50)
     batch_preference: str | None = Field(default=None, max_length=100)
     society: str = Field(default="prestige-white-meadows", max_length=100)

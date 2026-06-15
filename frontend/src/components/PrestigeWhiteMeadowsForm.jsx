@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { submitPrestigeRegistration } from "../api.js";
 import PlaneSky from "./PlaneSky.jsx";
 
-const AGE_GROUPS = ["6-9 years", "10-14 years"];
+const AGE_GROUPS = ["Age 5-8", "Age 9-14"];
 const GRADES = Array.from({ length: 10 }, (_, i) => `Grade ${i + 1}`);
 const BATCHES = ["June 29 - July 3"];
 const TIMING_SLOTS = ["10 AM - 12 PM"];
