@@ -23,6 +23,14 @@ services:
         sync: false
       - key: ACCESS_TOKEN
         sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_CONFIG_ID
+        value: "2349378865592558"
+      - key: META_GRAPH_API_VERSION
+        value: v21.0
       - key: WEBHOOK_VERIFY_TOKEN
         sync: false
       - key: GROQ_API_KEY

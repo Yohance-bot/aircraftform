@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import contextvars
 import logging
-import os
 
 import httpx
 
@@ -35,7 +34,9 @@ whatsapp_capture: contextvars.ContextVar[list | None] = contextvars.ContextVar(
 
 
 def _meta_url() -> str | None:
-    phone_number_id = os.getenv("PHONE_NUMBER_ID", "").strip()
+    from whatsapp_credentials import resolve_whatsapp_credentials
+
+    phone_number_id, _ = resolve_whatsapp_credentials()
     if not phone_number_id:
         return None
     return f"https://graph.facebook.com/{GRAPH_API_VERSION}/{phone_number_id}/messages"
@@ -52,11 +53,14 @@ async def send_whatsapp(payload: dict) -> dict | None:
         capture.append(payload)
         return {"captured": True}
 
+    from whatsapp_credentials import resolve_whatsapp_credentials
+
     url = _meta_url()
-    access_token = os.getenv("ACCESS_TOKEN", "").strip()
+    _, access_token = resolve_whatsapp_credentials()
+    access_token = (access_token or "").strip()
     if not url or not access_token:
         logger.warning(
-            "send_whatsapp skipped: PHONE_NUMBER_ID or ACCESS_TOKEN not configured"
+            "send_whatsapp skipped: no active WhatsApp account or env credentials"
         )
         return None
 

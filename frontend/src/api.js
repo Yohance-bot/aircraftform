@@ -350,3 +350,81 @@ export async function deleteAdminUser(adminKey, id) {
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// WhatsApp Business App Coexistence Onboarding
+// ---------------------------------------------------------------------------
+
+async function parseOnboardingError(res, fallback) {
+  let detail = fallback;
+  try {
+    const body = await res.json();
+    if (body?.detail) {
+      if (typeof body.detail === "object" && body.detail.message) {
+        detail = body.detail.message;
+      } else if (typeof body.detail === "string") {
+        detail = body.detail;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  throw new Error(detail);
+}
+
+export async function fetchOnboardingConfig() {
+  const res = await fetch(apiUrl("/api/onboarding/config"));
+  if (!res.ok) {
+    throw new Error("WhatsApp onboarding is not configured on the server.");
+  }
+  return res.json();
+}
+
+export async function fetchOnboardingStatus(adminKey) {
+  const res = await fetch(apiUrl("/api/onboarding/status"), {
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Could not load WhatsApp connection status.");
+  }
+  return res.json();
+}
+
+export async function completeOnboarding(adminKey, payload) {
+  const res = await fetch(apiUrl("/api/onboarding/complete"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    await parseOnboardingError(res, "WhatsApp onboarding failed.");
+  }
+  return res.json();
+}
+
+export async function reportOnboardingCancel(adminKey, payload) {
+  const res = await fetch(apiUrl("/api/onboarding/cancel"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Failed to record cancellation.");
+  }
+  return res.json();
+}

@@ -1,7 +1,12 @@
 import { useState } from "react";
 
 import { fetchRegistrations } from "../api.js";
-import BroadcastPanel from "./BroadcastPanel.jsx";
+import WhatsAppOnboardingPanel from "./WhatsAppOnboardingPanel.jsx";
+
+const TABS = [
+  { id: "registrations", label: "Registrations" },
+  { id: "whatsapp", label: "WhatsApp" },
+];
 
 // Columns shown in the on-screen table.
 const COLUMNS = [
@@ -43,6 +48,7 @@ const CSV_COLUMNS = [
 export default function AdminDashboard() {
   const [adminKey, setAdminKey] = useState("");
   const [authed, setAuthed] = useState(false);
+  const [activeTab, setActiveTab] = useState("registrations");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -124,6 +130,42 @@ export default function AdminDashboard() {
 
   return (
     <div className="w-full max-w-6xl">
+      <div className="flex gap-2 mb-5 border-b border-slate-200">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={
+              "px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors " +
+              (activeTab === tab.id
+                ? "border-brand-500 text-brand-600"
+                : "border-transparent text-slate-500 hover:text-slate-700")
+            }
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "whatsapp" ? (
+        <WhatsAppOnboardingPanel adminKey={adminKey} />
+      ) : (
+        <RegistrationsPanel
+          rows={rows}
+          loading={loading}
+          error={error}
+          onRefresh={handleRefresh}
+          onExportCsv={handleExportCsv}
+        />
+      )}
+    </div>
+  );
+}
+
+function RegistrationsPanel({ rows, loading, error, onRefresh, onExportCsv }) {
+  return (
+    <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">
@@ -136,7 +178,7 @@ export default function AdminDashboard() {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={handleRefresh}
+            onClick={onRefresh}
             disabled={loading}
             className="h-10 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold px-4 text-sm transition-colors"
           >
@@ -144,7 +186,7 @@ export default function AdminDashboard() {
           </button>
           <button
             type="button"
-            onClick={handleExportCsv}
+            onClick={onExportCsv}
             disabled={!rows.length}
             className="h-10 rounded-xl border border-brand-500 bg-white text-brand-600 hover:bg-brand-500 hover:text-white font-semibold px-4 text-sm transition-colors disabled:opacity-50 disabled:bg-white disabled:hover:text-brand-300"
           >
@@ -205,7 +247,7 @@ export default function AdminDashboard() {
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 

@@ -33,6 +33,12 @@ from registration_flow import (
     handle_registration_step,
     start_registration_flow,
 )
+from coexistence_webhook_handler import (
+    handle_account_update,
+    handle_contacts_sync,
+    handle_history,
+    handle_message_echoes,
+)
 from whatsapp_messages import (
     handle_registration_check,
     send_back_to_menu_button,
@@ -413,56 +419,70 @@ async def verify_webhook(
     return Response(status_code=403)
 
 
+async def _handle_inbound_messages(value: dict, db: Session) -> None:
+    """Process standard inbound customer messages."""
+    messages = value.get("messages") or []
+    if not messages:
+        return
+
+    message = messages[0]
+    phone = message.get("from")
+    if not phone:
+        return
+
+    message_body = _extract_message_body(message)
+    conv, bot_paused = _upsert_conversation_and_save_message(
+        phone, message_body, db
+    )
+
+    if bot_paused:
+        logger.info("Bot paused for %s, skipping dispatch", phone)
+        return
+
+    if is_admin_phone(phone, db):
+        if message.get("type") == "text":
+            text = (message.get("text") or {}).get("body", "")
+            logger.info("Admin message from %s: %s", phone, text[:50])
+            try:
+                response = await handle_admin_message(phone, text, db)
+                await send_text(phone, response)
+                _save_bot_message(phone, response, db)
+            except Exception as exc:
+                logger.exception("Admin agent error for %s: %s", phone, exc)
+                await send_text(phone, "Sorry, something went wrong. Please try again.")
+        else:
+            await send_text(phone, "Please send text messages for admin commands.")
+        return
+
+    await _dispatch_message(message, phone, db)
+
+
 @router.post("/webhook/whatsapp")
 async def receive_message(request: Request, db: Session = Depends(get_db)):
-    """Inbound message handler.
+    """Inbound webhook handler for messages and coexistence events.
 
     Always returns ``{"status": "ok"}`` with HTTP 200, even on internal
     errors — Meta retries non-2xx responses, which we don't want.
     """
     try:
         data = await request.json()
-        entry = (data.get("entry") or [{}])[0]
-        changes = (entry.get("changes") or [{}])[0]
-        value = changes.get("value") or {}
-        messages = value.get("messages") or []
+        for entry in data.get("entry") or []:
+            for change in entry.get("changes") or []:
+                field = change.get("field", "messages")
+                value = change.get("value") or {}
 
-        if not messages:
-            return {"status": "no messages"}
-
-        message = messages[0]
-        phone = message.get("from")
-        if not phone:
-            return {"status": "no from"}
-
-        # --- Conversation tracking: upsert + save inbound message ---
-        message_body = _extract_message_body(message)
-        conv, bot_paused = _upsert_conversation_and_save_message(
-            phone, message_body, db
-        )
-
-        # If bot is paused for this conversation, skip dispatch entirely
-        if bot_paused:
-            logger.info("Bot paused for %s, skipping dispatch", phone)
-            return {"status": "ok"}
-
-        # Check if sender is an admin — route to admin agent
-        if is_admin_phone(phone, db):
-            if message.get("type") == "text":
-                text = (message.get("text") or {}).get("body", "")
-                logger.info("Admin message from %s: %s", phone, text[:50])
-                try:
-                    response = await handle_admin_message(phone, text, db)
-                    await send_text(phone, response)
-                    _save_bot_message(phone, response, db)
-                except Exception as exc:
-                    logger.exception("Admin agent error for %s: %s", phone, exc)
-                    await send_text(phone, "Sorry, something went wrong. Please try again.")
-            else:
-                await send_text(phone, "Please send text messages for admin commands.")
-            return {"status": "ok"}
-
-        await _dispatch_message(message, phone, db)
+                if field == "messages":
+                    await _handle_inbound_messages(value, db)
+                elif field == "smb_message_echoes":
+                    await handle_message_echoes(value, db)
+                elif field == "history":
+                    await handle_history(value, db)
+                elif field == "smb_app_state_sync":
+                    await handle_contacts_sync(value, db)
+                elif field == "account_update":
+                    await handle_account_update(value, db)
+                else:
+                    logger.info("Unhandled webhook field: %s", field)
     except Exception as exc:
         logger.exception("Webhook error: %s", exc)
 

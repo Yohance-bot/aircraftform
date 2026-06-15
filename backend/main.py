@@ -18,6 +18,11 @@ from conversations_router import router as conversations_router
 from database import Base, engine, get_db
 from knowledge_router import router as knowledge_router, seed_knowledge_if_empty
 from models import Registration
+from onboarding_models import (  # noqa: F401 — ensures tables are registered
+    WhatsAppAccount,
+    WhatsAppOnboardingSession,
+)
+from onboarding_router import router as onboarding_router
 from registration_flow import RegistrationSession  # noqa: F401 — ensures table is registered
 from webhook_router import router as webhook_router
 from bot_router import router as bot_router
@@ -42,6 +47,7 @@ app.include_router(webhook_router)
 app.include_router(bot_router)
 app.include_router(conversations_router)
 app.include_router(knowledge_router)
+app.include_router(onboarding_router)
 
 
 @app.on_event("startup")
