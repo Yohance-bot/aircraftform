@@ -112,7 +112,15 @@ async def onboarding_complete(
     payload: CompleteOnboardingIn,
     db: Session = Depends(get_db),
 ) -> AccountStatusOut:
-    logger.info("Onboarding complete request received")
+    session_event = payload.session_data.get("event")
+    inner = payload.session_data.get("data") or {}
+    logger.info(
+        "POST /api/onboarding/complete: event=%s waba_id=%s phone_number_id=%s code_len=%s",
+        session_event,
+        inner.get("waba_id"),
+        inner.get("phone_number_id"),
+        len(payload.code.strip()),
+    )
     try:
         await complete_onboarding(
             db,
@@ -126,6 +134,7 @@ async def onboarding_complete(
             status_code=exc.status_code,
             detail={"message": exc.message, "code": exc.code},
         ) from exc
+    logger.info("POST /api/onboarding/complete succeeded")
     return AccountStatusOut(**get_onboarding_status(db))
 
 
@@ -134,6 +143,12 @@ def onboarding_cancel(
     payload: CancelOnboardingIn,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
+    logger.info(
+        "POST /api/onboarding/cancel: step=%s error=%s event=%s",
+        payload.current_step,
+        payload.error_message,
+        (payload.session_data or {}).get("event"),
+    )
     record_cancellation(
         db,
         current_step=payload.current_step,

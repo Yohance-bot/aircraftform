@@ -34,6 +34,17 @@ META_CONFIG_ID = os.getenv("META_CONFIG_ID", "2349378865592558").strip()
 
 FINISH_EVENT = "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
 
+# Meta may emit these on successful Embedded Signup depending on flow version.
+_ACCEPTED_FINISH_EVENTS = {
+    FINISH_EVENT,
+    "FINISH",
+    "FINISH_ONLY_WABA",
+}
+
+
+def _is_valid_finish_event(event: str) -> bool:
+    return event in _ACCEPTED_FINISH_EVENTS
+
 
 class OnboardingError(Exception):
     """Raised when onboarding cannot proceed; carries an HTTP-friendly code."""
@@ -263,9 +274,9 @@ async def complete_onboarding(
     event = session_data.get("event", "")
     inner = session_data.get("data") or session_data
 
-    if event != FINISH_EVENT:
+    if not _is_valid_finish_event(event):
         raise OnboardingError(
-            f"Expected event {FINISH_EVENT}, got {event or 'unknown'}.",
+            f"Expected a FINISH coexistence event, got {event or 'unknown'}.",
             code="invalid_session_event",
             status_code=400,
         )

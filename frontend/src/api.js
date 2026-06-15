@@ -394,6 +394,11 @@ export async function fetchOnboardingStatus(adminKey) {
 }
 
 export async function completeOnboarding(adminKey, payload) {
+  console.info("[WA onboarding] POST /api/onboarding/complete", {
+    event: payload?.session_data?.event,
+    waba_id: payload?.session_data?.data?.waba_id,
+    codeLength: payload?.code?.length,
+  });
   const res = await fetch(apiUrl("/api/onboarding/complete"), {
     method: "POST",
     headers: {
