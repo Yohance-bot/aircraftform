@@ -13,7 +13,7 @@ import { WA_OAUTH_CALLBACK_MESSAGE } from "./WhatsAppOAuthCallback.jsx";
 const FINISH_EVENT = "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING";
 const OAUTH_REDIRECT_EVENT = "OAUTH_REDIRECT";
 const CONFIG_ID_FALLBACK = "2349378865592558";
-const OAUTH_CALLBACK_PATH = "/admin/whatsapp-callback";
+/** Meta redirects to the site root — must match Valid OAuth Redirect URIs exactly. */
 /** Meta exchangeable codes expire in ~30s once issued. */
 const COMPLETION_WAIT_MS = 120_000;
 /** Wait for WA_EMBEDDED_SIGNUP JSON before OAuth-only asset discovery. */
@@ -22,12 +22,13 @@ const EMBEDDED_SIGNUP_WAIT_MS = 8_000;
 const LOG_PREFIX = "[WA onboarding]";
 
 const CONFIG_HINT =
-  "If Embedded Signup does not launch, verify Meta configuration 2349378865592558 has Business App coexistence enabled. " +
-  "Also add this exact URL under Facebook Login for Business → Settings → Valid OAuth Redirect URIs: ";
+  "Ensure this exact URL is listed under Facebook Login for Business → Settings → Valid OAuth Redirect URIs: ";
 
 function getOAuthRedirectUri() {
   if (typeof window === "undefined") return "";
-  return `${window.location.origin}${OAUTH_CALLBACK_PATH}`;
+  const envUri = import.meta.env.VITE_OAUTH_REDIRECT_URI?.trim();
+  if (envUri) return envUri.replace(/\/$/, "");
+  return window.location.origin;
 }
 
 function buildManualOAuthUrl({ appId, configId, graphVersion, state }) {
@@ -486,7 +487,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       if (format === "querystring") {
         appendLog(
           "postmessage_querystring_ignored",
-          "OAuth code is delivered via /admin/whatsapp-callback redirect",
+          "OAuth code is delivered via site-root OAuth redirect",
         );
         return;
       }

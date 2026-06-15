@@ -1,4 +1,4 @@
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, useSearchParams } from "react-router-dom";
 
 import RegistrationForm from "./components/RegistrationForm.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
@@ -29,6 +29,14 @@ function Shell({ children, societyName = "Palm Meadows Aeromodelling Camp" }) {
   );
 }
 
+function HomePage() {
+  const [searchParams] = useSearchParams();
+  if (searchParams.get("code") || searchParams.get("error")) {
+    return <WhatsAppOAuthCallback />;
+  }
+  return <RegistrationForm />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -36,7 +44,7 @@ export default function App() {
         path="/"
         element={
           <Shell>
-            <RegistrationForm />
+            <HomePage />
           </Shell>
         }
       />
