@@ -114,7 +114,32 @@ async def _graph_post(path: str, token: str, payload: dict | None = None) -> dic
         return {"raw": response.text}
 
 
-async def exchange_code_for_token(code: str, redirect_uri: str | None = None) -> tuple[str, dict[str, Any]]:
+def _redirect_uri_candidates(hints: list[str] | None = None) -> list[str | None]:
+    """Build ordered redirect_uri attempts for FB JS SDK code exchange."""
+    candidates: list[str | None] = []
+    seen: set[str] = set()
+
+    def add(uri: str | None) -> None:
+        key = "__omit__" if uri is None else uri
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(uri)
+
+    for hint in hints or []:
+        cleaned = hint.strip()
+        if cleaned:
+            add(cleaned)
+
+    add("")
+    add(None)
+    return candidates
+
+
+async def exchange_code_for_token(
+    code: str,
+    redirect_uri_hints: list[str] | None = None,
+) -> tuple[str, dict[str, Any]]:
     """Exchange the Embedded Signup code for a business-scoped access token."""
     if not META_APP_ID or not META_APP_SECRET:
         raise OnboardingError(
@@ -123,50 +148,59 @@ async def exchange_code_for_token(code: str, redirect_uri: str | None = None) ->
             status_code=500,
         )
 
-    params = {
-        "client_id": META_APP_ID,
-        "client_secret": META_APP_SECRET,
-        "code": code,
-    }
-    if redirect_uri:
-        params["redirect_uri"] = redirect_uri
+    candidates = _redirect_uri_candidates(redirect_uri_hints)
+    last_error = "unknown Meta error"
 
-    logger.info(
-        "Exchanging code: app_id=%s redirect_uri=%s code_len=%d",
-        META_APP_ID,
-        redirect_uri or "(none)",
-        len(code),
-    )
     async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(_graph_url("oauth/access_token"), params=params)
+        for uri in candidates:
+            params: dict[str, str] = {
+                "client_id": META_APP_ID,
+                "client_secret": META_APP_SECRET,
+                "code": code,
+            }
+            if uri is not None:
+                params["redirect_uri"] = uri
 
-    if response.status_code >= 400:
-        logger.error(
-            "Token exchange failed: status=%s body=%s",
-            response.status_code,
-            response.text[:1000],
-        )
-        raise OnboardingError(
-            "Authorization code is invalid or expired. Please try connecting again.",
-            code="invalid_code",
-            status_code=409,
-        )
+            logger.info(
+                "Exchanging code: app_id=%s redirect_uri=%r code_len=%d",
+                META_APP_ID,
+                uri,
+                len(code),
+            )
+            response = await client.get(_graph_url("oauth/access_token"), params=params)
 
-    try:
-        data = response.json()
-        token = data.get("access_token", "")
-        meta = data
-    except ValueError:
-        token = response.text.strip()
-        meta = {"raw": token}
+            if response.status_code < 400:
+                try:
+                    data = response.json()
+                    token = data.get("access_token", "")
+                    meta = {**data, "exchange_redirect_uri": uri}
+                except ValueError:
+                    token = response.text.strip()
+                    meta = {"raw": token, "exchange_redirect_uri": uri}
 
-    if not token:
-        raise OnboardingError(
-            "Token exchange succeeded but no access token was returned.",
-            code="invalid_code",
-            status_code=502,
-        )
-    return token, meta
+                if not token:
+                    raise OnboardingError(
+                        "Token exchange succeeded but no access token was returned.",
+                        code="invalid_code",
+                        status_code=502,
+                    )
+                logger.info("Token exchange succeeded with redirect_uri=%r", uri)
+                return token, meta
+
+            last_error = response.text[:500]
+            logger.warning(
+                "Token exchange failed for redirect_uri=%r: status=%s body=%s",
+                uri,
+                response.status_code,
+                last_error,
+            )
+
+    logger.error("Token exchange exhausted all redirect_uri candidates: %s", last_error)
+    raise OnboardingError(
+        f"Authorization code exchange failed. Meta says: {last_error}",
+        code="invalid_code",
+        status_code=409,
+    )
 
 
 async def subscribe_waba(waba_id: str, token: str) -> None:
@@ -322,14 +356,18 @@ def create_session(
 
 
 async def stage_code_exchange(
-    db: Session, code: str, redirect_uri: str | None = None
+    db: Session, code: str, redirect_uri_hints: list[str] | None = None
 ) -> WhatsAppOnboardingSession:
     """Exchange OAuth code immediately and stage the token for later completion."""
     session = create_session(db, event_type="code_staged")
-    _append_step(session, "exchanging_token_immediately", detail=f"redirect_uri={redirect_uri or '(none)'}")
+    _append_step(
+        session,
+        "exchanging_token_immediately",
+        detail=f"redirect_uri_hints={json.dumps(redirect_uri_hints or [])[:300]}",
+    )
     db.commit()
     try:
-        access_token, token_meta = await exchange_code_for_token(code, redirect_uri)
+        access_token, token_meta = await exchange_code_for_token(code, redirect_uri_hints)
     except OnboardingError:
         session.status = "failed"
         _append_step(session, "token_exchange_failed", level="error")
@@ -353,7 +391,7 @@ async def _resolve_access_token(
     code: str | None,
     staging_session_id: int | None,
     ob_session: WhatsAppOnboardingSession,
-    redirect_uri: str | None = None,
+    redirect_uri_hints: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     if staging_session_id:
         staged = db.get(WhatsAppOnboardingSession, staging_session_id)
@@ -378,7 +416,7 @@ async def _resolve_access_token(
             status_code=400,
         )
 
-    return await exchange_code_for_token(code, redirect_uri)
+    return await exchange_code_for_token(code, redirect_uri_hints)
 
 
 def record_cancellation(

@@ -113,6 +113,22 @@ function isFinishEvent(eventName) {
   );
 }
 
+function buildRedirectUriHints(meta = {}) {
+  const hints = [];
+  const add = (value) => {
+    if (value === undefined || value === null) return;
+    if (!hints.includes(value)) hints.push(value);
+  };
+
+  add(meta.origin);
+  if (typeof window !== "undefined") {
+    add(window.location.href.split("#")[0]);
+    add(window.location.origin);
+  }
+  add("");
+  return hints;
+}
+
 function extractCodeFromSession(sessionData) {
   if (!sessionData) return null;
   const inner = sessionData.data || sessionData;
@@ -314,19 +330,22 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   }, [appendLog, tryCompleteOnboarding]);
 
   const exchangeCodeImmediately = useCallback(
-    async (code, source) => {
+    async (code, source, meta = {}) => {
       if (codeExchangeInFlightRef.current) {
         return codeExchangeInFlightRef.current;
       }
 
       const promise = (async () => {
-        const redirectUri = window.location.origin;
-        appendLog("exchange_code_start", `source=${source} length=${code.length} redirect_uri=${redirectUri}`);
+        const redirectUriHints = buildRedirectUriHints(meta);
+        appendLog(
+          "exchange_code_start",
+          `source=${source} length=${code.length} hints=${safeJson(redirectUriHints)}`,
+        );
         setFlowState(true, "Exchanging authorization code…");
         try {
           const result = await exchangeOnboardingCode(adminKey, {
             code,
-            redirect_uri: redirectUri,
+            redirect_uri_hints: redirectUriHints,
           });
           stagingSessionIdRef.current = result.staging_session_id;
           appendLog("exchange_code_success", safeJson(result));
@@ -348,14 +367,14 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   );
 
   const captureAuthCode = useCallback(
-    async (code, source) => {
+    async (code, source, meta = {}) => {
       if (!code || authCodeRef.current) return;
       authCodeRef.current = code;
       appendLog(`code_from_${source}`, `length=${code.length}`);
       scheduleOAuthFallback();
 
       try {
-        await exchangeCodeImmediately(code, source);
+        await exchangeCodeImmediately(code, source, meta);
         tryCompleteOnboarding();
       } catch (err) {
         await failFlow(err?.message || "Failed to exchange authorization code.");
@@ -501,7 +520,10 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       if (format === "querystring") {
         appendLog("postmessage_accepted", "oauth_querystring_callback");
         if (payload.code) {
-          captureAuthCode(payload.code, "postmessage_querystring");
+          captureAuthCode(payload.code, "postmessage_querystring", {
+            origin: payload.origin,
+            domain: payload.domain,
+          });
         } else {
           appendLog("postmessage_rejected", "querystring without code field", "warning");
         }

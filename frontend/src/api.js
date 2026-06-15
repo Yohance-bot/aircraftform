@@ -396,6 +396,7 @@ export async function fetchOnboardingStatus(adminKey) {
 export async function exchangeOnboardingCode(adminKey, payload) {
   console.info("[WA onboarding] POST /api/onboarding/exchange-code", {
     codeLength: payload?.code?.length,
+    redirect_uri_hints: payload?.redirect_uri_hints,
   });
   const res = await fetch(apiUrl("/api/onboarding/exchange-code"), {
     method: "POST",
