@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -17,6 +17,7 @@ from onboarding_service import (
     complete_onboarding,
     get_onboarding_status,
     record_cancellation,
+    stage_code_exchange,
 )
 
 logger = logging.getLogger("amc.onboarding.router")
@@ -44,10 +45,27 @@ class SessionData(BaseModel):
 
 
 class CompleteOnboardingIn(BaseModel):
-    code: str = Field(..., min_length=1)
+    code: str | None = Field(default=None)
+    staging_session_id: int | None = None
     session_data: dict[str, Any]
     session_id: int | None = None
     discover_assets: bool = False
+
+    @model_validator(mode="after")
+    def require_code_or_staging(self) -> "CompleteOnboardingIn":
+        has_code = bool(self.code and self.code.strip())
+        if not has_code and not self.staging_session_id:
+            raise ValueError("Either code or staging_session_id is required.")
+        return self
+
+
+class ExchangeCodeIn(BaseModel):
+    code: str = Field(..., min_length=1)
+
+
+class ExchangeCodeOut(BaseModel):
+    staging_session_id: int
+    token_exchanged_at: str | None = None
 
 
 class CancelOnboardingIn(BaseModel):
@@ -105,6 +123,34 @@ def onboarding_status(db: Session = Depends(get_db)) -> AccountStatusOut:
 
 
 @router.post(
+    "/exchange-code",
+    response_model=ExchangeCodeOut,
+    dependencies=[Depends(require_admin)],
+)
+async def onboarding_exchange_code(
+    payload: ExchangeCodeIn,
+    db: Session = Depends(get_db),
+) -> ExchangeCodeOut:
+    logger.info("POST /api/onboarding/exchange-code: code_len=%s", len(payload.code.strip()))
+    try:
+        session = await stage_code_exchange(db, payload.code.strip())
+    except OnboardingError as exc:
+        logger.error("Code exchange failed: %s (%s)", exc.message, exc.code)
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
+    exchanged_at = (
+        session.token_exchanged_at.isoformat() if session.token_exchanged_at else None
+    )
+    logger.info("POST /api/onboarding/exchange-code succeeded: session_id=%s", session.id)
+    return ExchangeCodeOut(
+        staging_session_id=session.id,
+        token_exchanged_at=exchanged_at,
+    )
+
+
+@router.post(
     "/complete",
     response_model=AccountStatusOut,
     dependencies=[Depends(require_admin)],
@@ -116,19 +162,21 @@ async def onboarding_complete(
     session_event = payload.session_data.get("event")
     inner = payload.session_data.get("data") or {}
     logger.info(
-        "POST /api/onboarding/complete: event=%s waba_id=%s phone_number_id=%s code_len=%s discover_assets=%s",
+        "POST /api/onboarding/complete: event=%s waba_id=%s phone_number_id=%s code_len=%s staging_session_id=%s discover_assets=%s",
         session_event,
         inner.get("waba_id"),
         inner.get("phone_number_id"),
-        len(payload.code.strip()),
+        len(payload.code.strip()) if payload.code else 0,
+        payload.staging_session_id,
         payload.discover_assets,
     )
     try:
         await complete_onboarding(
             db,
-            code=payload.code.strip(),
+            code=payload.code.strip() if payload.code else None,
             session_data=payload.session_data,
             existing_session_id=payload.session_id,
+            staging_session_id=payload.staging_session_id,
             discover_assets=payload.discover_assets,
         )
     except OnboardingError as exc:

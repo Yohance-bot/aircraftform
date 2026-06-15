@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   completeOnboarding,
+  exchangeOnboardingCode,
   fetchOnboardingConfig,
   fetchOnboardingStatus,
   reportOnboardingCancel,
@@ -14,7 +15,7 @@ const CONFIG_ID_FALLBACK = "2349378865592558";
 const COMPLETION_WAIT_MS = 120_000;
 const CODE_POLL_MS = 2_000;
 /** Wait for WA_EMBEDDED_SIGNUP JSON before OAuth-only asset discovery. */
-const EMBEDDED_SIGNUP_WAIT_MS = 20_000;
+const EMBEDDED_SIGNUP_WAIT_MS = 8_000;
 
 const LOG_PREFIX = "[WA onboarding]";
 
@@ -131,6 +132,8 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
 
   const sessionDataRef = useRef(null);
   const authCodeRef = useRef(null);
+  const stagingSessionIdRef = useRef(null);
+  const codeExchangeInFlightRef = useRef(null);
   const completionInFlightRef = useRef(false);
   const waitTimeoutRef = useRef(null);
   const codePollRef = useRef(null);
@@ -206,7 +209,9 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   const tryCompleteOnboarding = useCallback(async () => {
     const sessionData = sessionDataRef.current;
     const code = authCodeRef.current;
+    const stagingSessionId = stagingSessionIdRef.current;
     const hasSession = hasValidSession(sessionData);
+    const hasStagedToken = Boolean(stagingSessionId);
     const hasCode = Boolean(code);
     const discoverAssets = sessionData?.event === OAUTH_REDIRECT_EVENT;
 
@@ -215,6 +220,8 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       safeJson({
         hasSession,
         hasCode,
+        hasStagedToken,
+        stagingSessionId,
         sessionEvent: sessionData?.event || null,
         codeLength: code ? code.length : 0,
         inFlight: completionInFlightRef.current,
@@ -222,15 +229,15 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       }),
     );
 
-    if (!hasSession || !hasCode) {
+    if (!hasSession || (!hasCode && !hasStagedToken)) {
       if (flowActiveRef.current) {
-        const missing = !hasSession && !hasCode
-          ? "session + code"
+        const missing = !hasSession && !hasCode && !hasStagedToken
+          ? "session + token"
           : !hasSession
           ? "FINISH session event"
-          : "OAuth code";
+          : "staged token";
         setFlowState(true, `Waiting for ${missing}…`);
-        if (hasCode && !hasSession) {
+        if ((hasCode || hasStagedToken) && !hasSession) {
           setConfigHint(CONFIG_HINT);
         }
       }
@@ -245,20 +252,27 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     completionInFlightRef.current = true;
     clearWaitTimers();
     setConfigHint("");
-    setFlowState(true, discoverAssets ? "Discovering WhatsApp assets from token…" : "Exchanging token with server…");
+    setFlowState(
+      true,
+      discoverAssets
+        ? "Discovering WhatsApp assets from token…"
+        : "Completing WhatsApp connection…",
+    );
     setError("");
 
     appendLog("post_complete_start", safeJson({ event: sessionData.event, discoverAssets }));
 
     try {
       const result = await completeOnboarding(adminKey, {
-        code,
+        code: hasStagedToken ? undefined : code,
+        staging_session_id: stagingSessionId || undefined,
         session_data: sessionData,
         discover_assets: discoverAssets,
       });
       appendLog("post_complete_success", safeJson({ connected: result.connected }));
       setStatus(result);
       authCodeRef.current = null;
+      stagingSessionIdRef.current = null;
       sessionDataRef.current = null;
       flowActiveRef.current = false;
       setError("");
@@ -299,15 +313,51 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     }, EMBEDDED_SIGNUP_WAIT_MS);
   }, [appendLog, tryCompleteOnboarding]);
 
+  const exchangeCodeImmediately = useCallback(
+    async (code, source) => {
+      if (codeExchangeInFlightRef.current) {
+        return codeExchangeInFlightRef.current;
+      }
+
+      const promise = (async () => {
+        appendLog("exchange_code_start", `source=${source} length=${code.length}`);
+        setFlowState(true, "Exchanging authorization code…");
+        try {
+          const result = await exchangeOnboardingCode(adminKey, { code });
+          stagingSessionIdRef.current = result.staging_session_id;
+          appendLog("exchange_code_success", safeJson(result));
+          return result;
+        } catch (err) {
+          appendLog("exchange_code_error", err?.message || "unknown", "error");
+          throw err;
+        }
+      })();
+
+      codeExchangeInFlightRef.current = promise;
+      try {
+        return await promise;
+      } finally {
+        codeExchangeInFlightRef.current = null;
+      }
+    },
+    [adminKey, appendLog, setFlowState],
+  );
+
   const captureAuthCode = useCallback(
-    (code, source) => {
+    async (code, source) => {
       if (!code || authCodeRef.current) return;
       authCodeRef.current = code;
       appendLog(`code_from_${source}`, `length=${code.length}`);
       scheduleOAuthFallback();
-      tryCompleteOnboarding();
+
+      try {
+        await exchangeCodeImmediately(code, source);
+        tryCompleteOnboarding();
+      } catch (err) {
+        await failFlow(err?.message || "Failed to exchange authorization code.");
+      }
     },
-    [appendLog, scheduleOAuthFallback, tryCompleteOnboarding],
+    [appendLog, exchangeCodeImmediately, failFlow, scheduleOAuthFallback, tryCompleteOnboarding],
   );
 
   const pollForAuthCode = useCallback(() => {
@@ -538,6 +588,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     pollCountRef.current = 0;
     sessionDataRef.current = null;
     authCodeRef.current = null;
+    stagingSessionIdRef.current = null;
     setError("");
     setConfigHint("");
     setFlowState(true, "Opening Embedded Signup…");

@@ -132,6 +132,11 @@ async def exchange_code_for_token(code: str) -> tuple[str, dict[str, Any]]:
         response = await client.get(_graph_url("oauth/access_token"), params=params)
 
     if response.status_code >= 400:
+        logger.error(
+            "Token exchange failed: status=%s body=%s",
+            response.status_code,
+            response.text[:1000],
+        )
         raise OnboardingError(
             "Authorization code is invalid or expired. Please try connecting again.",
             code="invalid_code",
@@ -307,6 +312,63 @@ def create_session(
     return session
 
 
+async def stage_code_exchange(db: Session, code: str) -> WhatsAppOnboardingSession:
+    """Exchange OAuth code immediately and stage the token for later completion."""
+    session = create_session(db, event_type="code_staged")
+    _append_step(session, "exchanging_token_immediately")
+    db.commit()
+    try:
+        access_token, token_meta = await exchange_code_for_token(code)
+    except OnboardingError:
+        session.status = "failed"
+        _append_step(session, "token_exchange_failed", level="error")
+        db.commit()
+        raise
+
+    session.pending_access_token = access_token
+    session.pending_token_meta = json.dumps(token_meta)
+    session.token_exchanged_at = datetime.utcnow()
+    session.status = "token_staged"
+    _append_step(session, "token_staged")
+    db.commit()
+    db.refresh(session)
+    logger.info("OAuth code staged: session_id=%s", session.id)
+    return session
+
+
+async def _resolve_access_token(
+    db: Session,
+    *,
+    code: str | None,
+    staging_session_id: int | None,
+    ob_session: WhatsAppOnboardingSession,
+) -> tuple[str, dict[str, Any]]:
+    if staging_session_id:
+        staged = db.get(WhatsAppOnboardingSession, staging_session_id)
+        if not staged or not staged.pending_access_token:
+            raise OnboardingError(
+                "Staged access token is missing. Try connecting again.",
+                code="invalid_staging",
+                status_code=400,
+            )
+        token_meta = json.loads(staged.pending_token_meta or "{}")
+        _append_step(
+            ob_session,
+            "using_staged_token",
+            detail=f"staged_at={staged.token_exchanged_at.isoformat() if staged.token_exchanged_at else 'unknown'}",
+        )
+        return staged.pending_access_token, token_meta
+
+    if not code:
+        raise OnboardingError(
+            "No authorization code or staged token provided.",
+            code="missing_code",
+            status_code=400,
+        )
+
+    return await exchange_code_for_token(code)
+
+
 def record_cancellation(
     db: Session,
     *,
@@ -351,22 +413,30 @@ def record_cancellation(
 async def complete_onboarding(
     db: Session,
     *,
-    code: str,
+    code: str | None = None,
     session_data: dict[str, Any],
     existing_session_id: int | None = None,
+    staging_session_id: int | None = None,
     discover_assets: bool = False,
 ) -> WhatsAppAccount:
     """Run the full coexistence onboarding pipeline."""
+    if not code and not staging_session_id:
+        raise OnboardingError(
+            "Authorization code or staged token is required.",
+            code="missing_code",
+            status_code=400,
+        )
+
     event = session_data.get("event", "")
     inner = session_data.get("data") or session_data
     oauth_only = event == OAUTH_REDIRECT_EVENT or discover_assets
 
     if oauth_only:
-        ob_session = (
-            db.get(WhatsAppOnboardingSession, existing_session_id)
-            if existing_session_id
-            else None
-        )
+        ob_session = None
+        if staging_session_id:
+            ob_session = db.get(WhatsAppOnboardingSession, staging_session_id)
+        elif existing_session_id:
+            ob_session = db.get(WhatsAppOnboardingSession, existing_session_id)
         if not ob_session:
             ob_session = create_session(db, event_type=OAUTH_REDIRECT_EVENT)
         _append_step(
@@ -377,10 +447,15 @@ async def complete_onboarding(
         )
         db.commit()
 
-        _append_step(ob_session, "exchanging_token")
+        _append_step(ob_session, "resolving_access_token")
         db.commit()
         try:
-            access_token, token_meta = await exchange_code_for_token(code)
+            access_token, token_meta = await _resolve_access_token(
+                db,
+                code=code,
+                staging_session_id=staging_session_id,
+                ob_session=ob_session,
+            )
         except OnboardingError:
             ob_session.status = "failed"
             _append_step(ob_session, "token_exchange_failed", level="error")
@@ -502,17 +577,18 @@ async def complete_onboarding(
             status_code=400,
         )
 
-    if existing_session_id:
+    ob_session = None
+    if staging_session_id:
+        ob_session = db.get(WhatsAppOnboardingSession, staging_session_id)
+        if ob_session:
+            ob_session.event_type = event
+            ob_session.waba_id = waba_id
+            ob_session.phone_number_id = phone_number_id or None
+            ob_session.business_id = business_id
+            db.commit()
+    if not ob_session and existing_session_id:
         ob_session = db.get(WhatsAppOnboardingSession, existing_session_id)
-        if not ob_session:
-            ob_session = create_session(
-                db,
-                event_type=event,
-                waba_id=waba_id,
-                phone_number_id=phone_number_id or None,
-                business_id=business_id,
-            )
-    else:
+    if not ob_session:
         ob_session = create_session(
             db,
             event_type=event,
@@ -528,10 +604,15 @@ async def complete_onboarding(
     _append_step(ob_session, "conflict_check_passed")
     db.commit()
 
-    _append_step(ob_session, "exchanging_token")
+    _append_step(ob_session, "resolving_access_token")
     db.commit()
     try:
-        access_token, token_meta = await exchange_code_for_token(code)
+        access_token, token_meta = await _resolve_access_token(
+            db,
+            code=code,
+            staging_session_id=staging_session_id,
+            ob_session=ob_session,
+        )
     except OnboardingError:
         ob_session.status = "failed"
         _append_step(ob_session, "token_exchange_failed", level="error")

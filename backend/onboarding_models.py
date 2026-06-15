@@ -73,6 +73,10 @@ class WhatsAppOnboardingSession(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="started")
     step_logs: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
 
+    pending_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pending_token_meta: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_exchanged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )

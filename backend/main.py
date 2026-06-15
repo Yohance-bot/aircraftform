@@ -57,11 +57,36 @@ def on_startup() -> None:
     ConvBase.metadata.create_all(bind=engine)
     ensure_registration_columns()
     ensure_conversation_columns()
+    ensure_onboarding_session_columns()
     db = next(get_db())
     try:
         seed_knowledge_if_empty(db)
     finally:
         db.close()
+
+
+def ensure_onboarding_session_columns() -> None:
+    """Add token staging columns to whatsapp_onboarding_sessions if missing."""
+    inspector = inspect(engine)
+    if "whatsapp_onboarding_sessions" not in inspector.get_table_names():
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns("whatsapp_onboarding_sessions")}
+    with engine.begin() as conn:
+        if "pending_access_token" not in existing_columns:
+            conn.execute(
+                text("ALTER TABLE whatsapp_onboarding_sessions ADD COLUMN pending_access_token TEXT")
+            )
+        if "pending_token_meta" not in existing_columns:
+            conn.execute(
+                text("ALTER TABLE whatsapp_onboarding_sessions ADD COLUMN pending_token_meta TEXT")
+            )
+        if "token_exchanged_at" not in existing_columns:
+            conn.execute(
+                text(
+                    "ALTER TABLE whatsapp_onboarding_sessions ADD COLUMN token_exchanged_at TIMESTAMP"
+                )
+            )
 
 
 def ensure_conversation_columns() -> None:

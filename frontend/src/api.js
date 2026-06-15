@@ -393,11 +393,33 @@ export async function fetchOnboardingStatus(adminKey) {
   return res.json();
 }
 
+export async function exchangeOnboardingCode(adminKey, payload) {
+  console.info("[WA onboarding] POST /api/onboarding/exchange-code", {
+    codeLength: payload?.code?.length,
+  });
+  const res = await fetch(apiUrl("/api/onboarding/exchange-code"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    await parseOnboardingError(res, "Failed to exchange authorization code.");
+  }
+  return res.json();
+}
+
 export async function completeOnboarding(adminKey, payload) {
   console.info("[WA onboarding] POST /api/onboarding/complete", {
     event: payload?.session_data?.event,
     waba_id: payload?.session_data?.data?.waba_id,
     codeLength: payload?.code?.length,
+    staging_session_id: payload?.staging_session_id,
     discover_assets: payload?.discover_assets,
   });
   const res = await fetch(apiUrl("/api/onboarding/complete"), {
