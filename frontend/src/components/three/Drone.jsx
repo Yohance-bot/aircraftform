@@ -4,8 +4,8 @@ import { Float, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 const MODEL_URL = "/drone.glb";
-const TARGET_SIZE = 8.5;
-const DISPLAY_SCALE = 1.35;
+const TARGET_SIZE = 4.8;
+const DISPLAY_SCALE = 1;
 
 useGLTF.preload(MODEL_URL);
 
