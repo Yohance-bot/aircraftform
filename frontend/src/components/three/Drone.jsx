@@ -4,7 +4,7 @@ import { Float, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 const MODEL_URL = "/drone.glb";
-const TARGET_SIZE = 4.8;
+const TARGET_SIZE = 4.0;
 const DISPLAY_SCALE = 1;
 
 useGLTF.preload(MODEL_URL);
@@ -49,8 +49,8 @@ export default function Drone() {
   });
 
   return (
-    <Float speed={2} rotationIntensity={0.18} floatIntensity={0.75} floatingRange={[-0.08, 0.08]}>
-      <group ref={rig} scale={DISPLAY_SCALE} position={[0, -0.08, 0]} rotation={[0.08, 0.5, 0]}>
+    <Float speed={2} rotationIntensity={0.18} floatIntensity={0.75} floatingRange={[-0.04, 0.04]}>
+      <group ref={rig} scale={DISPLAY_SCALE} position={[0, 0.22, 0]} rotation={[0.08, 0.5, 0]}>
         <primitive object={model} />
       </group>
     </Float>

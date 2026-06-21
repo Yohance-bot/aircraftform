@@ -56,7 +56,7 @@ export default function HeroScene() {
       <Canvas
         shadows
         dpr={[1, 1.8]}
-        camera={{ position: [0.3, 0.85, 4.4], fov: 40 }}
+        camera={{ position: [0.3, 1.0, 4.7], fov: 40 }}
         gl={{ antialias: true, alpha: true }}
       >
         <ambientLight intensity={0.65} />
@@ -79,9 +79,9 @@ export default function HeroScene() {
             <Lightformer intensity={1.2} position={[5, 0, 2]} scale={[5, 5, 1]} color="#ffffff" />
           </Environment>
           <ContactShadows
-            position={[0, -2.0, 0]}
+            position={[0, -1.7, 0]}
             opacity={0.3}
-            scale={9}
+            scale={8}
             blur={3.6}
             far={4}
             resolution={512}
