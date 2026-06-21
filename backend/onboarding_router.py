@@ -16,6 +16,7 @@ from onboarding_service import (
     OnboardingError,
     complete_onboarding,
     get_onboarding_status,
+    manual_connect_whatsapp,
     record_cancellation,
     stage_code_exchange,
 )
@@ -63,11 +64,20 @@ class ExchangeCodeIn(BaseModel):
     code: str = Field(..., min_length=1)
     redirect_uri: str | None = None
     redirect_uri_hints: list[str] | None = None
+    facebook_login_for_business: bool = True
 
 
 class ExchangeCodeOut(BaseModel):
     staging_session_id: int
     token_exchanged_at: str | None = None
+
+
+class ManualConnectIn(BaseModel):
+    waba_id: str = Field(..., min_length=1)
+    phone_number_id: str = Field(..., min_length=1)
+    access_token: str = Field(..., min_length=1)
+    business_id: str | None = None
+    subscribe_webhooks: bool = True
 
 
 class CancelOnboardingIn(BaseModel):
@@ -88,6 +98,10 @@ class AccountStatusOut(BaseModel):
     connected: bool
     onboarding_status: str | None = None
     sync_status: str | None = None
+    credential_source: str | None = None
+    env_credentials_configured: bool = False
+    env_waba_id: str | None = None
+    env_phone_number_id: str | None = None
     waba_id: str | None = None
     phone_number_id: str | None = None
     business_id: str | None = None
@@ -125,6 +139,79 @@ def onboarding_status(db: Session = Depends(get_db)) -> AccountStatusOut:
 
 
 @router.post(
+    "/manual",
+    response_model=AccountStatusOut,
+    dependencies=[Depends(require_admin)],
+)
+async def onboarding_manual_connect(
+    payload: ManualConnectIn,
+    db: Session = Depends(get_db),
+) -> AccountStatusOut:
+    logger.info(
+        "POST /api/onboarding/manual: waba_id=%s phone_number_id=%s token_len=%s",
+        payload.waba_id.strip(),
+        payload.phone_number_id.strip(),
+        len(payload.access_token.strip()),
+    )
+    try:
+        await manual_connect_whatsapp(
+            db,
+            waba_id=payload.waba_id.strip(),
+            phone_number_id=payload.phone_number_id.strip(),
+            access_token=payload.access_token.strip(),
+            business_id=payload.business_id.strip() if payload.business_id else None,
+            subscribe_webhooks=payload.subscribe_webhooks,
+        )
+    except OnboardingError as exc:
+        logger.error("Manual connect failed: %s (%s)", exc.message, exc.code)
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
+    return AccountStatusOut(**get_onboarding_status(db))
+
+
+@router.post(
+    "/manual/from-env",
+    response_model=AccountStatusOut,
+    dependencies=[Depends(require_admin)],
+)
+async def onboarding_manual_from_env(
+    db: Session = Depends(get_db),
+) -> AccountStatusOut:
+    waba_id = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID", "").strip()
+    phone_number_id = os.getenv("PHONE_NUMBER_ID", "").strip()
+    access_token = os.getenv("ACCESS_TOKEN", "").strip()
+    logger.info(
+        "POST /api/onboarding/manual/from-env: waba_id=%s phone_number_id=%s configured=%s",
+        waba_id or "(missing)",
+        phone_number_id or "(missing)",
+        bool(access_token),
+    )
+    if not waba_id or not phone_number_id or not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "Set PHONE_NUMBER_ID, WHATSAPP_BUSINESS_ACCOUNT_ID, and ACCESS_TOKEN in backend/.env.",
+                "code": "missing_env_credentials",
+            },
+        )
+    try:
+        await manual_connect_whatsapp(
+            db,
+            waba_id=waba_id,
+            phone_number_id=phone_number_id,
+            access_token=access_token,
+        )
+    except OnboardingError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": exc.message, "code": exc.code},
+        ) from exc
+    return AccountStatusOut(**get_onboarding_status(db))
+
+
+@router.post(
     "/exchange-code",
     response_model=ExchangeCodeOut,
     dependencies=[Depends(require_admin)],
@@ -142,7 +229,12 @@ async def onboarding_exchange_code(
     if payload.redirect_uri and payload.redirect_uri not in hints:
         hints = [payload.redirect_uri, *hints]
     try:
-        session = await stage_code_exchange(db, payload.code.strip(), hints or None)
+        session = await stage_code_exchange(
+            db,
+            payload.code.strip(),
+            hints or None,
+            business_login=payload.facebook_login_for_business,
+        )
     except OnboardingError as exc:
         logger.error("Code exchange failed: %s (%s)", exc.message, exc.code)
         raise HTTPException(

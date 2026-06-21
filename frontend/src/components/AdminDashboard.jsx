@@ -166,8 +166,23 @@ export default function AdminDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("wa_resume") === "1" ? "settings" : "dashboard";
+  });
   const [activeConversationCount, setActiveConversationCount] = useState(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("wa_resume") !== "1") return;
+
+    setActiveTab("settings");
+    const savedKey = sessionStorage.getItem("wa_resume_admin_key");
+    if (savedKey && !authed) {
+      setAdminKey(savedKey);
+      loadData(savedKey);
+    }
+  }, []);
 
   useEffect(() => {
     if (!authed || !adminKey.trim()) {

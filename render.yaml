@@ -28,7 +28,7 @@ services:
       - key: META_APP_SECRET
         sync: false
       - key: META_CONFIG_ID
-        value: "2349378865592558"
+        value: "1696605061677781"
       - key: META_GRAPH_API_VERSION
         value: v21.0
       - key: WEBHOOK_VERIFY_TOKEN

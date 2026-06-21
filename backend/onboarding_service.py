@@ -30,7 +30,7 @@ logger = logging.getLogger("amc.onboarding")
 GRAPH_API_VERSION = os.getenv("META_GRAPH_API_VERSION", "v21.0").strip()
 META_APP_ID = os.getenv("META_APP_ID", "").strip()
 META_APP_SECRET = os.getenv("META_APP_SECRET", "").strip()
-META_CONFIG_ID = os.getenv("META_CONFIG_ID", "2349378865592558").strip()
+META_CONFIG_ID = os.getenv("META_CONFIG_ID", "1696605061677781").strip()
 
 FINISH_EVENT = "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
 
@@ -114,8 +114,16 @@ async def _graph_post(path: str, token: str, payload: dict | None = None) -> dic
         return {"raw": response.text}
 
 
-def _redirect_uri_candidates(hints: list[str] | None = None) -> list[str | None]:
-    """Build ordered redirect_uri attempts for FB JS SDK code exchange."""
+def _redirect_uri_candidates(
+    hints: list[str] | None = None,
+    *,
+    business_login: bool = True,
+) -> list[str | None]:
+    """Build ordered redirect_uri attempts for token exchange.
+
+    Facebook Login for Business (config_id flows) typically omits redirect_uri
+    at exchange time — try that before explicit URIs.
+    """
     candidates: list[str | None] = []
     seen: set[str] = set()
 
@@ -126,19 +134,31 @@ def _redirect_uri_candidates(hints: list[str] | None = None) -> list[str | None]
         seen.add(key)
         candidates.append(uri)
 
+    if business_login:
+        add(None)
+        add("")
+
     for hint in hints or []:
         cleaned = hint.strip()
         if cleaned:
             add(cleaned)
+            if cleaned.endswith("/"):
+                add(cleaned.rstrip("/"))
+            else:
+                add(f"{cleaned}/")
 
-    add("")
-    add(None)
+    if not business_login:
+        add("")
+        add(None)
+
     return candidates
 
 
 async def exchange_code_for_token(
     code: str,
     redirect_uri_hints: list[str] | None = None,
+    *,
+    business_login: bool = True,
 ) -> tuple[str, dict[str, Any]]:
     """Exchange the Embedded Signup code for a business-scoped access token."""
     if not META_APP_ID or not META_APP_SECRET:
@@ -148,7 +168,7 @@ async def exchange_code_for_token(
             status_code=500,
         )
 
-    candidates = _redirect_uri_candidates(redirect_uri_hints)
+    candidates = _redirect_uri_candidates(redirect_uri_hints, business_login=business_login)
     last_error = "unknown Meta error"
 
     async with httpx.AsyncClient(timeout=20.0) as client:
@@ -211,6 +231,107 @@ async def subscribe_waba(waba_id: str, token: str) -> None:
             code="missing_permissions",
             status_code=403,
         )
+
+
+async def verify_phone_access(phone_number_id: str, token: str) -> dict[str, Any]:
+    """Validate token can read the phone number (manual credential setup)."""
+    return await _graph_get(
+        phone_number_id,
+        token,
+        params={"fields": "display_phone_number,verified_name,platform_type,is_on_biz_app"},
+    )
+
+
+async def manual_connect_whatsapp(
+    db: Session,
+    *,
+    waba_id: str,
+    phone_number_id: str,
+    access_token: str,
+    business_id: str | None = None,
+    subscribe_webhooks: bool = True,
+) -> WhatsAppAccount:
+    """Save WhatsApp Cloud API credentials manually (no Embedded Signup)."""
+    waba_id = waba_id.strip()
+    phone_number_id = phone_number_id.strip()
+    access_token = access_token.strip()
+
+    if not waba_id or not phone_number_id or not access_token:
+        raise OnboardingError(
+            "WABA ID, phone number ID, and access token are required.",
+            code="missing_credentials",
+            status_code=400,
+        )
+
+    try:
+        phone_info = await verify_phone_access(phone_number_id, access_token)
+    except OnboardingError as exc:
+        raise OnboardingError(
+            f"Could not verify access token with Meta: {exc.message}",
+            code="invalid_token",
+            status_code=400,
+        ) from exc
+
+    webhook_subscribed = False
+    if subscribe_webhooks:
+        try:
+            await subscribe_waba(waba_id, access_token)
+            webhook_subscribed = True
+        except OnboardingError as exc:
+            logger.warning("Manual connect: webhook subscribe failed: %s", exc.message)
+
+    existing = (
+        db.query(WhatsAppAccount)
+        .filter(WhatsAppAccount.waba_id == waba_id)
+        .first()
+    )
+    if existing:
+        account = existing
+        account.phone_number_id = phone_number_id
+        account.business_id = business_id
+        account.access_token = access_token
+        account.display_phone_number = phone_info.get("display_phone_number")
+        account.verified_name = phone_info.get("verified_name")
+        account.is_on_biz_app = phone_info.get("is_on_biz_app")
+        account.platform_type = phone_info.get("platform_type")
+        account.coexistence_enabled = False
+        account.webhook_subscribed = webhook_subscribed
+        account.onboarding_status = "active"
+        account.sync_status = "skipped"
+        account.updated_at = datetime.utcnow()
+    else:
+        account = WhatsAppAccount(
+            waba_id=waba_id,
+            phone_number_id=phone_number_id,
+            business_id=business_id,
+            access_token=access_token,
+            display_phone_number=phone_info.get("display_phone_number"),
+            verified_name=phone_info.get("verified_name"),
+            is_on_biz_app=phone_info.get("is_on_biz_app"),
+            platform_type=phone_info.get("platform_type"),
+            coexistence_enabled=False,
+            webhook_subscribed=webhook_subscribed,
+            onboarding_status="active",
+            sync_status="skipped",
+            raw_business_info=json.dumps({"source": "manual_connect", "phone_info": phone_info}),
+        )
+        db.add(account)
+
+    db.query(WhatsAppAccount).filter(
+        WhatsAppAccount.id != account.id,
+        WhatsAppAccount.is_active.is_(True),
+    ).update({"is_active": False, "updated_at": datetime.utcnow()})
+
+    account.is_active = True
+    db.commit()
+    db.refresh(account)
+    logger.info(
+        "Manual WhatsApp connect: waba_id=%s phone_number_id=%s display=%s",
+        account.waba_id,
+        account.phone_number_id,
+        account.display_phone_number,
+    )
+    return account
 
 
 async def fetch_phone_number_id(waba_id: str, token: str) -> str:
@@ -281,6 +402,7 @@ async def discover_assets_from_token(access_token: str) -> dict[str, Any]:
             status_code=400,
         )
 
+    scanned: list[dict[str, Any]] = []
     for waba_id in waba_ids:
         numbers = await _graph_get(f"{waba_id}/phone_numbers", access_token)
         for entry in numbers.get("data") or []:
@@ -288,6 +410,15 @@ async def discover_assets_from_token(access_token: str) -> dict[str, Any]:
             if not phone_number_id:
                 continue
             phone_info = await verify_coexistence_status(phone_number_id, access_token)
+            scanned.append(
+                {
+                    "waba_id": waba_id,
+                    "phone_number_id": phone_number_id,
+                    "display_phone_number": phone_info.get("display_phone_number"),
+                    "is_on_biz_app": phone_info.get("is_on_biz_app"),
+                    "platform_type": phone_info.get("platform_type"),
+                }
+            )
             if phone_info.get("is_on_biz_app") and phone_info.get("platform_type") == "CLOUD_API":
                 logger.info(
                     "discovered coexistence phone: waba_id=%s phone_number_id=%s",
@@ -302,10 +433,15 @@ async def discover_assets_from_token(access_token: str) -> dict[str, Any]:
                     "debug_token": token_data,
                 }
 
+    scan_summary = json.dumps(scanned)[:800]
+    logger.warning("No coexistence phone found. Scanned: %s", scan_summary)
     raise OnboardingError(
         "WhatsApp accounts were shared but none are in Business App coexistence mode "
-        "(is_on_biz_app=true, platform_type=CLOUD_API). Complete the WhatsApp Business "
-        "App onboarding screens in Embedded Signup, not just the OAuth reconnect step.",
+        "(is_on_biz_app=true, platform_type=CLOUD_API). You likely only completed the "
+        "Facebook OAuth reconnect step — the WhatsApp Embedded Signup coexistence UI never "
+        f"launched. Phones found: {scan_summary}. "
+        f"Recreate Meta configuration {META_CONFIG_ID} as WhatsApp Embedded Signup with "
+        "Business App coexistence enabled.",
         code="no_coexistence_phone",
         status_code=400,
     )
@@ -356,7 +492,11 @@ def create_session(
 
 
 async def stage_code_exchange(
-    db: Session, code: str, redirect_uri_hints: list[str] | None = None
+    db: Session,
+    code: str,
+    redirect_uri_hints: list[str] | None = None,
+    *,
+    business_login: bool = True,
 ) -> WhatsAppOnboardingSession:
     """Exchange OAuth code immediately and stage the token for later completion."""
     session = create_session(db, event_type="code_staged")
@@ -367,7 +507,9 @@ async def stage_code_exchange(
     )
     db.commit()
     try:
-        access_token, token_meta = await exchange_code_for_token(code, redirect_uri_hints)
+        access_token, token_meta = await exchange_code_for_token(
+            code, redirect_uri_hints, business_login=business_login
+        )
     except OnboardingError:
         session.status = "failed"
         _append_step(session, "token_exchange_failed", level="error")
@@ -802,10 +944,19 @@ def get_onboarding_status(db: Session) -> dict[str, Any]:
         .first()
     )
 
+    env_waba = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID", "").strip()
+    env_phone = os.getenv("PHONE_NUMBER_ID", "").strip()
+    env_token = os.getenv("ACCESS_TOKEN", "").strip()
+    env_configured = bool(env_waba and env_phone and env_token)
+
     if not account:
         return {
             "connected": False,
             "onboarding_status": None,
+            "credential_source": "environment" if env_configured else None,
+            "env_credentials_configured": env_configured,
+            "env_waba_id": env_waba or None,
+            "env_phone_number_id": env_phone or None,
             "latest_session": _session_to_dict(latest_session) if latest_session else None,
         }
 
@@ -813,6 +964,8 @@ def get_onboarding_status(db: Session) -> dict[str, Any]:
         "connected": account.onboarding_status == "active",
         "onboarding_status": account.onboarding_status,
         "sync_status": account.sync_status,
+        "credential_source": "database",
+        "env_credentials_configured": env_configured,
         "waba_id": account.waba_id,
         "phone_number_id": account.phone_number_id,
         "business_id": account.business_id,

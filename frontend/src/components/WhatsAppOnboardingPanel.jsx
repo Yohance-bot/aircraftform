@@ -8,11 +8,21 @@ import {
   reportOnboardingCancel,
 } from "../api.js";
 
-import { WA_OAUTH_CALLBACK_MESSAGE } from "./WhatsAppOAuthCallback.jsx";
+import WhatsAppManualSetup from "./WhatsAppManualSetup.jsx";
+import {
+  WA_OAUTH_CALLBACK_MESSAGE,
+  WA_OAUTH_STORAGE_KEY,
+  WA_RESUME_ADMIN_KEY,
+  clearOAuthCallbackResult,
+  clearOAuthPending,
+  readOAuthCallbackResult,
+  readOAuthPending,
+  saveOAuthPending,
+} from "./WhatsAppOAuthCallback.jsx";
 
 const FINISH_EVENT = "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING";
 const OAUTH_REDIRECT_EVENT = "OAUTH_REDIRECT";
-const CONFIG_ID_FALLBACK = "2349378865592558";
+const CONFIG_ID_FALLBACK = "1696605061677781";
 /** Meta redirects to the site root — must match Valid OAuth Redirect URIs exactly. */
 /** Meta exchangeable codes expire in ~30s once issued. */
 const COMPLETION_WAIT_MS = 120_000;
@@ -22,7 +32,8 @@ const EMBEDDED_SIGNUP_WAIT_MS = 8_000;
 const LOG_PREFIX = "[WA onboarding]";
 
 const CONFIG_HINT =
-  "Ensure this exact URL is listed under Facebook Login for Business → Settings → Valid OAuth Redirect URIs: ";
+  "If you only see Facebook reconnect (not WhatsApp onboarding screens), configuration 1696605061677781 " +
+  "must be WhatsApp Embedded Signup with Business App coexistence enabled. Valid OAuth Redirect URI: ";
 
 function getOAuthRedirectUri() {
   if (typeof window === "undefined") return "";
@@ -35,6 +46,7 @@ function buildManualOAuthUrl({ appId, configId, graphVersion, state }) {
   const redirectUri = getOAuthRedirectUri();
   const extras = JSON.stringify({
     setup: {},
+    feature: "whatsapp_embedded_signup",
     featureType: "whatsapp_business_app_onboarding",
     sessionInfoVersion: "3",
   });
@@ -113,7 +125,8 @@ function isFinishEvent(eventName) {
 
 function buildRedirectUriHints(meta = {}) {
   if (meta.redirect_uri) {
-    return [meta.redirect_uri];
+    const uri = meta.redirect_uri.replace(/\/$/, "");
+    return [uri, `${uri}/`];
   }
 
   const hints = [];
@@ -124,10 +137,9 @@ function buildRedirectUriHints(meta = {}) {
 
   add(meta.origin);
   if (typeof window !== "undefined") {
-    add(window.location.href.split("#")[0]);
-    add(window.location.origin);
+    add(window.location.origin.replace(/\/$/, ""));
+    add(`${window.location.origin.replace(/\/$/, "")}/`);
   }
-  add("");
   return hints;
 }
 
@@ -348,6 +360,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
           const result = await exchangeOnboardingCode(adminKey, {
             code,
             redirect_uri_hints: redirectUriHints,
+            facebook_login_for_business: true,
           });
           stagingSessionIdRef.current = result.staging_session_id;
           appendLog("exchange_code_success", safeJson(result));
@@ -404,7 +417,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
         hasSession && !hasCode
           ? "Embedded Signup finished but no OAuth code arrived. Close any popup blockers and try again."
           : !hasSession && hasCode
-          ? "OAuth succeeded but WhatsApp Embedded Signup never launched. Check Meta configuration 2349378865592558 supports Business App coexistence."
+          ? "OAuth succeeded but WhatsApp Embedded Signup never launched. Check Meta configuration 1696605061677781 supports Business App coexistence."
           : "WhatsApp setup timed out waiting for Meta. Please try again.",
         {
           error_message: "Completion wait timed out",
@@ -452,27 +465,106 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     };
   }, [adminKey, appendLog]);
 
+  const handleOAuthCallback = useCallback(
+    (payload, source, redirectUri = getOAuthRedirectUri()) => {
+      const { code, error, error_description: errorDescription, state } = payload || {};
+      appendLog(
+        "oauth_callback_received",
+        safeJson({ source, hasCode: Boolean(code), error: error || null, redirectUri }),
+      );
+
+      if (state && oauthStateRef.current && state !== oauthStateRef.current) {
+        appendLog("oauth_callback_state_mismatch", source, "error");
+        return;
+      }
+
+      if (error) {
+        clearOAuthCallbackResult();
+        failFlow(errorDescription || error || "Meta authorization failed.");
+        return;
+      }
+
+      if (code) {
+        clearOAuthCallbackResult();
+        captureAuthCode(code, source, {
+          redirect_uri: redirectUri,
+        });
+      }
+    },
+    [appendLog, captureAuthCode, failFlow],
+  );
+
+  useEffect(() => {
+    if (loading || !config) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("wa_resume") !== "1") return;
+
+    const stored = readOAuthCallbackResult();
+    if (!stored) {
+      failFlow("OAuth resume failed — no result stored. Try connecting again.");
+      window.history.replaceState({}, "", "/admin");
+      return;
+    }
+
+    const pending = readOAuthPending();
+    if (pending?.state) {
+      oauthStateRef.current = pending.state;
+    }
+    const resumeRedirectUri = pending?.redirect_uri || getOAuthRedirectUri();
+
+    flowActiveRef.current = true;
+    appendLog("oauth_resume", safeJson(stored || { empty: true }));
+    clearOAuthPending();
+    sessionStorage.removeItem(WA_RESUME_ADMIN_KEY);
+    window.history.replaceState({}, "", "/admin");
+    startCompletionWait();
+
+    if (!stored.code && !stored.error) {
+      failFlow(
+        "Meta redirected without an authorization code. Only the Facebook reconnect screen appeared — " +
+          "verify configuration 1696605061677781 is WhatsApp Embedded Signup with Business App coexistence enabled.",
+      );
+      clearOAuthCallbackResult();
+      return;
+    }
+
+    handleOAuthCallback(
+      { ...stored, type: WA_OAUTH_CALLBACK_MESSAGE },
+      "resume_redirect",
+      resumeRedirectUri,
+    );
+  }, [loading, config, appendLog, failFlow, handleOAuthCallback, startCompletionWait]);
+
+  const consumeStoredOAuthResult = useCallback(
+    (source) => {
+      const stored = readOAuthCallbackResult();
+      if (!stored?.code && !stored?.error) return false;
+      handleOAuthCallback({ ...stored, type: WA_OAUTH_CALLBACK_MESSAGE }, source);
+      return Boolean(stored?.code || stored?.error);
+    },
+    [handleOAuthCallback],
+  );
+
+  useEffect(() => {
+    function onStorage(event) {
+      if (event.key !== WA_OAUTH_STORAGE_KEY || !event.newValue) return;
+      try {
+        const payload = JSON.parse(event.newValue);
+        handleOAuthCallback({ ...payload, type: WA_OAUTH_CALLBACK_MESSAGE }, "session_storage");
+      } catch {
+        appendLog("oauth_storage_parse_failed", "", "warning");
+      }
+    }
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [appendLog, handleOAuthCallback]);
+
   useEffect(() => {
     function handleMessage(event) {
       if (event.origin === window.location.origin && event.data?.type === WA_OAUTH_CALLBACK_MESSAGE) {
-        const { code, error, error_description: errorDescription, state } = event.data || {};
-        appendLog("oauth_callback_received", safeJson({ hasCode: Boolean(code), error: error || null }));
-
-        if (state && oauthStateRef.current && state !== oauthStateRef.current) {
-          appendLog("oauth_callback_state_mismatch", "", "error");
-          return;
-        }
-
-        if (error) {
-          failFlow(errorDescription || error || "Meta authorization failed.");
-          return;
-        }
-
-        if (code) {
-          captureAuthCode(code, "manual_oauth_callback", {
-            redirect_uri: getOAuthRedirectUri(),
-          });
-        }
+        handleOAuthCallback(event.data, "postmessage");
         return;
       }
 
@@ -558,7 +650,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [appendLog, captureAuthCode, clearWaitTimers, failFlow, tryCompleteOnboarding]);
+  }, [appendLog, captureAuthCode, clearWaitTimers, failFlow, handleOAuthCallback, tryCompleteOnboarding]);
 
   useEffect(() => {
     return () => clearWaitTimers();
@@ -577,6 +669,7 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
     authCodeRef.current = null;
     stagingSessionIdRef.current = null;
     oauthStateRef.current = crypto.randomUUID();
+    clearOAuthCallbackResult();
     setError("");
     setConfigHint(`${CONFIG_HINT}${getOAuthRedirectUri()}`);
     setFlowState(true, "Opening Embedded Signup…");
@@ -591,16 +684,19 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
 
     appendLog("connect_clicked", safeJson({ config_id: configId, oauth_url: oauthUrl }));
 
+    saveOAuthPending(oauthStateRef.current, getOAuthRedirectUri());
     startCompletionWait();
 
     const popup = window.open(
       oauthUrl,
       "wa_embedded_signup",
-      "width=600,height=700,scrollbars=yes,resizable=yes",
+      "width=600,height=800,scrollbars=yes,resizable=yes",
     );
 
     if (!popup) {
-      failFlow("Popup blocked. Allow popups for this site and try again.");
+      appendLog("popup_blocked", "falling back to full-page redirect", "warning");
+      sessionStorage.setItem(WA_RESUME_ADMIN_KEY, adminKey);
+      window.location.href = oauthUrl;
       return;
     }
 
@@ -612,12 +708,21 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       popupRef.current = null;
 
       if (!authCodeRef.current && flowActiveRef.current) {
-        appendLog("popup_closed_no_code", "", "warning");
+        appendLog("popup_closed_no_code", "checking sessionStorage fallback", "warning");
+        if (consumeStoredOAuthResult("session_storage_on_close")) {
+          return;
+        }
         window.setTimeout(() => {
-          if (flowActiveRef.current && !authCodeRef.current) {
-            failFlow("WhatsApp authorization window was closed before completing.");
+          if (consumeStoredOAuthResult("session_storage_delayed")) {
+            return;
           }
-        }, 1500);
+          if (flowActiveRef.current && !authCodeRef.current) {
+            failFlow(
+              "Authorization popup closed before completing. If you only saw Facebook reconnect, " +
+                "fix Meta configuration 1696605061677781 to enable WhatsApp Business App coexistence.",
+            );
+          }
+        }, 3000);
       }
     }, 500);
   }
@@ -638,11 +743,14 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
         <div>
           <h2 className="text-xl font-extrabold text-slate-900">WhatsApp Connection</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Connect your existing WhatsApp Business App number to the Cloud API
-            without leaving the mobile app.
+            Connect WhatsApp Cloud API using credentials from Meta API Setup.
           </p>
         </div>
-        <StatusBadge connected={connected} status={status?.onboarding_status} />
+        <StatusBadge
+          connected={connected}
+          status={status?.onboarding_status}
+          coexistence={status?.coexistence_enabled}
+        />
       </div>
 
       {error && (
@@ -666,22 +774,15 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
       {connected ? (
         <ConnectedDetails status={status} onRefresh={refreshStatus} />
       ) : (
-        <div className="mt-6 space-y-4">
-          <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
-            <li>WhatsApp Business App v2.24.17 or higher required</li>
-            <li>Keep the Business App open during setup</li>
-            <li>Open the app every 14 days to stay connected</li>
-            <li>Only new messages are synced — no history import</li>
-          </ul>
-          <button
-            type="button"
-            onClick={handleConnect}
-            disabled={connecting || !config?.app_id}
-            className="inline-flex items-center rounded-xl bg-[#1877f2] hover:bg-[#166fe5] disabled:opacity-60 text-white font-semibold px-6 py-3 text-sm transition-colors"
-          >
-            {connecting ? "Connecting…" : "Connect WhatsApp Business App"}
-          </button>
-        </div>
+        <WhatsAppManualSetup
+          adminKey={adminKey}
+          status={status}
+          onSuccess={(result) => {
+            setStatus(result);
+            setError("");
+          }}
+          onError={setError}
+        />
       )}
 
       {(debugLog.length > 0 || status?.latest_session?.step_logs?.length > 0) && (
@@ -691,9 +792,11 @@ export default function WhatsAppOnboardingPanel({ adminKey }) {
   );
 }
 
-function StatusBadge({ connected, status }) {
+function StatusBadge({ connected, status, coexistence }) {
   const label = connected
-    ? "Connected (Coexistence)"
+    ? coexistence
+      ? "Connected (Coexistence)"
+      : "Connected (Cloud API)"
     : status === "failed"
     ? "Connection failed"
     : status === "disconnected"

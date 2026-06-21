@@ -393,6 +393,38 @@ export async function fetchOnboardingStatus(adminKey) {
   return res.json();
 }
 
+export async function connectWhatsAppManual(adminKey, payload) {
+  const res = await fetch(apiUrl("/api/onboarding/manual"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    await parseOnboardingError(res, "Failed to save WhatsApp credentials.");
+  }
+  return res.json();
+}
+
+export async function connectWhatsAppFromEnv(adminKey) {
+  const res = await fetch(apiUrl("/api/onboarding/manual/from-env"), {
+    method: "POST",
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    await parseOnboardingError(res, "Failed to activate .env credentials.");
+  }
+  return res.json();
+}
+
 export async function exchangeOnboardingCode(adminKey, payload) {
   console.info("[WA onboarding] POST /api/onboarding/exchange-code", {
     codeLength: payload?.code?.length,
