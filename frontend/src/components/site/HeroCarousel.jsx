@@ -102,7 +102,7 @@ export default function HeroCarousel() {
 
   return (
     <section
-      className="relative w-full bg-ink md:flex md:h-[85vh] md:max-h-[920px] md:min-h-[520px] md:items-center md:justify-center"
+      className="relative w-screen max-w-none overflow-hidden bg-ink md:h-[85vh]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={onTouchStart}
@@ -140,8 +140,8 @@ export default function HeroCarousel() {
         </AnimatePresence>
       </div>
 
-      {/* Desktop: full-width poster centred in the viewport */}
-      <div className="relative hidden h-full w-full overflow-hidden md:block">
+      {/* Desktop: edge-to-edge cover */}
+      <div className="relative hidden h-full w-full md:block">
         <AnimatePresence initial={false} custom={direction} mode="popLayout">
           <motion.div
             key={slide.id}
@@ -151,11 +151,11 @@ export default function HeroCarousel() {
             animate="center"
             exit="exit"
             transition={TRANSITION}
-            className="absolute inset-0 flex items-center justify-center"
+            className="absolute inset-0"
           >
             <Link
               to={slide.link}
-              className="flex h-full w-full items-center justify-center"
+              className="block h-full w-full"
               aria-label={slide.alt}
             >
               <img
@@ -163,7 +163,7 @@ export default function HeroCarousel() {
                 alt={slide.alt}
                 width={1448}
                 height={1086}
-                className="h-auto w-full max-h-full object-contain"
+                className="h-full w-full object-cover object-[50%_38%]"
                 draggable={false}
                 fetchPriority={index === 0 ? "high" : "auto"}
               />
@@ -171,10 +171,9 @@ export default function HeroCarousel() {
           </motion.div>
         </AnimatePresence>
 
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/10" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
       </div>
 
-      {/* Arrows — desktop/tablet only; mobile uses swipe */}
       <button
         type="button"
         onClick={() => go(-1)}
@@ -192,7 +191,6 @@ export default function HeroCarousel() {
         <ChevronRight className="h-6 w-6" />
       </button>
 
-      {/* Dots — below poster on mobile, overlaid on desktop */}
       <div className="bg-ink px-4 py-3 md:absolute md:inset-x-0 md:bottom-6 md:bg-transparent md:py-0">
         <Dots index={index} paused={paused} onSelect={goTo} />
       </div>
