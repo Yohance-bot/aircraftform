@@ -102,7 +102,7 @@ export default function HeroCarousel() {
 
   return (
     <section
-      className="relative w-full bg-ink md:h-[clamp(520px,85vh,920px)]"
+      className="relative w-full bg-ink md:flex md:h-[85vh] md:max-h-[920px] md:min-h-[520px] md:items-center md:justify-center"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={onTouchStart}
@@ -113,7 +113,7 @@ export default function HeroCarousel() {
       aria-roledescription="carousel"
       aria-label="Featured products"
     >
-      {/* Mobile: show full poster without cropping */}
+      {/* Mobile: full poster, no crop */}
       <div className="relative w-full md:hidden">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
@@ -140,7 +140,7 @@ export default function HeroCarousel() {
         </AnimatePresence>
       </div>
 
-      {/* Desktop: immersive full-bleed cover */}
+      {/* Desktop: full-width poster centred in the viewport */}
       <div className="relative hidden h-full w-full overflow-hidden md:block">
         <AnimatePresence initial={false} custom={direction} mode="popLayout">
           <motion.div
@@ -151,11 +151,11 @@ export default function HeroCarousel() {
             animate="center"
             exit="exit"
             transition={TRANSITION}
-            className="absolute inset-0"
+            className="absolute inset-0 flex items-center justify-center"
           >
             <Link
               to={slide.link}
-              className="block h-full w-full"
+              className="flex h-full w-full items-center justify-center"
               aria-label={slide.alt}
             >
               <img
@@ -163,7 +163,7 @@ export default function HeroCarousel() {
                 alt={slide.alt}
                 width={1448}
                 height={1086}
-                className="h-full w-full object-cover object-top"
+                className="h-auto w-full max-h-full object-contain"
                 draggable={false}
                 fetchPriority={index === 0 ? "high" : "auto"}
               />
