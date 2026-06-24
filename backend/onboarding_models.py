@@ -1,4 +1,4 @@
-"""SQLAlchemy models for WhatsApp Business App coexistence onboarding."""
+"""SQLAlchemy models for WhatsApp Cloud API credentials."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from database import Base
 
 
 class WhatsAppAccount(Base):
-    """Stores the active WhatsApp Cloud API + Business App coexistence connection."""
+    """Stores the active WhatsApp Cloud API connection."""
 
     __tablename__ = "whatsapp_accounts"
 
@@ -51,7 +51,7 @@ class WhatsAppAccount(Base):
 
 
 class WhatsAppOnboardingSession(Base):
-    """Audit trail for each coexistence onboarding attempt."""
+    """Legacy audit trail for past onboarding attempts."""
 
     __tablename__ = "whatsapp_onboarding_sessions"
 

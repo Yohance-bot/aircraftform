@@ -17,8 +17,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from conversation_models import AdminUser, Conversation, Message
+from crm_service import log_timeline
 from database import get_db
-from whatsapp_messages import send_text
+from marketing_service import build_tracked_body, create_campaign, personalise, record_send
+from whatsapp_messages import send_text, send_text_tracked
 
 logger = logging.getLogger("amc.conversations")
 
@@ -101,6 +103,7 @@ class BroadcastResponse(BaseModel):
     sent: int
     failed: int
     results: list[BroadcastResult]
+    campaign_id: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +262,8 @@ async def send_message_to_conversation(
         db.add(msg)
 
         conv.updated_at = datetime.utcnow()
+        log_timeline(db, phone, "message_sent", "Agent sent a message",
+                     actor="admin", commit=False)
         db.commit()
 
         return {"success": True}
@@ -370,11 +375,25 @@ async def broadcast_message(
     sent = 0
     failed = 0
 
+    # Every broadcast is automatically recorded as a campaign so it shows up
+    # in Campaign Analytics with per-recipient delivery tracking (Phase 11).
+    campaign = create_campaign(
+        db,
+        name=f"Broadcast {datetime.utcnow():%d %b %H:%M}",
+        type="broadcast",
+        body=payload.message,
+    )
+
     for phone in payload.phones:
         try:
-            await send_text(phone, payload.message)
-
             conv = db.query(Conversation).filter(Conversation.phone == phone).first()
+            # Personalise + rewrite any links into per-recipient tracked links.
+            body = personalise(payload.message, conv)
+            body = build_tracked_body(db, body, campaign.id, phone)
+
+            wamid = await send_text_tracked(phone, body)
+            record_send(db, campaign.id, phone, wamid, ok=True, commit=False)
+
             if conv:
                 msg = Message(
                     phone=phone,
@@ -384,11 +403,17 @@ async def broadcast_message(
                 )
                 db.add(msg)
                 conv.updated_at = datetime.utcnow()
+                log_timeline(db, phone, "campaign_received",
+                             "Received a broadcast", actor="admin", commit=False)
 
             sent += 1
             results.append({"phone": phone, "success": True, "error": None})
         except Exception as exc:
             failed += 1
+            try:
+                record_send(db, campaign.id, phone, None, ok=False, error=str(exc), commit=False)
+            except Exception:
+                pass
             results.append({"phone": phone, "success": False, "error": str(exc)})
             logger.warning("Broadcast failed for %s: %s", phone, exc)
 
@@ -397,7 +422,7 @@ async def broadcast_message(
     except Exception as exc:
         logger.exception("Failed to commit broadcast messages: %s", exc)
 
-    return {"sent": sent, "failed": failed, "results": results}
+    return {"sent": sent, "failed": failed, "results": results, "campaign_id": campaign.id}
 
 
 # ---------------------------------------------------------------------------

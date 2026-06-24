@@ -1,9 +1,8 @@
-import { Routes, Route, Link, useSearchParams } from "react-router-dom";
+import { Routes, Route, Link } from "react-router-dom";
 
 import RegistrationForm from "./components/RegistrationForm.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import PrestigeWhiteMeadowsForm from "./components/PrestigeWhiteMeadowsForm.jsx";
-import WhatsAppOAuthCallback from "./components/WhatsAppOAuthCallback.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import ShopPage from "./pages/ShopPage.jsx";
 
@@ -33,24 +32,10 @@ function Shell({ children, societyName = "Palm Meadows Aeromodelling Camp" }) {
   );
 }
 
-// At "/", a Meta OAuth redirect arrives with ?code= / ?error=. Preserve the
-// WhatsApp onboarding callback there; otherwise show the new storefront.
-function HomeRoute() {
-  const [searchParams] = useSearchParams();
-  if (searchParams.get("code") || searchParams.get("error")) {
-    return (
-      <Shell>
-        <WhatsAppOAuthCallback />
-      </Shell>
-    );
-  }
-  return <HomePage />;
-}
-
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomeRoute />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/shop" element={<ShopPage />} />
       <Route
         path="/camp"
@@ -65,14 +50,6 @@ export default function App() {
         element={
           <Shell>
             <AdminDashboard />
-          </Shell>
-        }
-      />
-      <Route
-        path="/admin/whatsapp-callback"
-        element={
-          <Shell>
-            <WhatsAppOAuthCallback />
           </Shell>
         }
       />

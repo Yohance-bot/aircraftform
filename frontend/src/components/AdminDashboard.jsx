@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Shield, Settings, CheckCircle, Download } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Shield, Settings, CheckCircle, Download, Gauge, Contact, Bell, TrendingUp, Megaphone, FileText, ClipboardCheck, SlidersHorizontal, Smartphone, GitBranch, BarChart3 } from 'lucide-react';
 
 import { fetchConversations, fetchRegistrations } from "../api.js";
 import AdminsPanel from "./AdminsPanel.jsx";
@@ -7,6 +7,15 @@ import BroadcastPanel from "./BroadcastPanel.jsx";
 import ConversationsPanel from "./ConversationsPanel.jsx";
 import KnowledgePanel from "./KnowledgePanel.jsx";
 import WhatsAppOnboardingPanel from "./WhatsAppOnboardingPanel.jsx";
+import CrmDashboardPanel from "./crm/CrmDashboardPanel.jsx";
+import ContactsPanel from "./crm/ContactsPanel.jsx";
+import FollowUpPanel from "./crm/FollowUpPanel.jsx";
+import TemplatesPanel from "./crm/TemplatesPanel.jsx";
+import CampaignPanel from "./crm/CampaignPanel.jsx";
+import DripPanel from "./crm/DripPanel.jsx";
+import CampaignAnalyticsPanel from "./crm/CampaignAnalyticsPanel.jsx";
+import InsightsPanel from "./crm/InsightsPanel.jsx";
+import CrmSettingsPanel from "./crm/CrmSettingsPanel.jsx";
 
 // Columns shown in the on-screen table.
 const COLUMNS = [
@@ -63,12 +72,46 @@ const Cloud = ({ width, opacity }) => (
 
 const NAV_ITEMS = [
   { id: "dashboard", Icon: LayoutDashboard, label: "Dashboard" },
-  { id: "registrations", Icon: Users, label: "Registrations" },
+  { id: "registrations", Icon: ClipboardCheck, label: "Registrations" },
+  { section: "CRM" },
+  { id: "crm_dashboard", Icon: Gauge, label: "Lead Dashboard" },
+  { id: "contacts", Icon: Contact, label: "Contacts" },
+  { id: "followups", Icon: Bell, label: "Follow-ups" },
   { id: "conversations", Icon: MessageSquare, label: "Conversations" },
+  { id: "insights", Icon: TrendingUp, label: "Insights" },
+  { section: "Marketing" },
+  { id: "campaigns", Icon: Megaphone, label: "Targeted Send" },
   { id: "broadcast", Icon: Radio, label: "Broadcast" },
+  { id: "drips", Icon: GitBranch, label: "Drip Sequences" },
+  { id: "analytics", Icon: BarChart3, label: "Campaign Analytics" },
+  { id: "templates", Icon: FileText, label: "Templates" },
   { id: "knowledge", Icon: BookOpen, label: "Knowledge" },
+  { section: "Team" },
   { id: "admins", Icon: Shield, label: "Admins" },
 ];
+
+// Tabs that need a fixed-height container with their own internal scroll.
+const FULL_HEIGHT_TABS = new Set([
+  "conversations",
+  "broadcast",
+  "knowledge",
+  "admins",
+  "contacts",
+  "templates",
+  "drips",
+]);
+// Tabs that render their own layout and shouldn't get the sky header / stat row.
+const CRM_TABS = new Set([
+  "crm_dashboard",
+  "contacts",
+  "followups",
+  "insights",
+  "campaigns",
+  "templates",
+  "drips",
+  "analytics",
+  "crm_settings",
+]);
 
 const SIDEBAR_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -335,8 +378,8 @@ export default function AdminDashboard() {
   }
 
   const confirmedCount = rows.filter(r => r.payment_status === "confirmed").length;
-  const isFullHeightTab = activeTab === "conversations" || activeTab === "broadcast" || activeTab === "knowledge" || activeTab === "admins";
-  const showSkyHeader = activeTab !== "conversations";
+  const isFullHeightTab = FULL_HEIGHT_TABS.has(activeTab);
+  const showSkyHeader = activeTab === "dashboard" || activeTab === "registrations";
 
   return (
     <>
@@ -373,26 +416,39 @@ export default function AdminDashboard() {
 
           {/* Nav Items */}
           <div style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
-            {NAV_ITEMS.map(item => (
-              <div
-                key={item.id}
-                className={`amc-nav-item ${activeTab === item.id ? "active" : ""}`}
-                onClick={() => setActiveTab(item.id)}
-              >
-                <item.Icon size={18} style={{ width: "22px", textAlign: "center" }} />
-                <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>{item.label}</span>
-              </div>
+            {NAV_ITEMS.map((item, idx) => (
+              item.section ? (
+                <div key={`sec-${idx}`} className="amc-nav-label" style={{ padding: "10px 14px 4px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(245,158,11,0.55)" }}>
+                  {item.section}
+                </div>
+              ) : (
+                <div
+                  key={item.id}
+                  className={`amc-nav-item ${activeTab === item.id ? "active" : ""}`}
+                  onClick={() => setActiveTab(item.id)}
+                >
+                  <item.Icon size={18} style={{ width: "22px", textAlign: "center" }} />
+                  <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>{item.label}</span>
+                </div>
+              )
             ))}
           </div>
 
-          {/* Settings — WhatsApp connection & coexistence onboarding */}
+          {/* Settings — CRM config + WhatsApp Cloud API connection */}
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0" }}>
+            <div
+              className={`amc-nav-item ${activeTab === "crm_settings" ? "active" : ""}`}
+              onClick={() => setActiveTab("crm_settings")}
+            >
+              <SlidersHorizontal size={18} style={{ width: "22px", textAlign: "center" }} />
+              <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>CRM Settings</span>
+            </div>
             <div
               className={`amc-nav-item ${activeTab === "settings" ? "active" : ""}`}
               onClick={() => setActiveTab("settings")}
             >
-              <Settings size={18} style={{ width: "22px", textAlign: "center" }} />
-              <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>Settings</span>
+              <Smartphone size={18} style={{ width: "22px", textAlign: "center" }} />
+              <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>WhatsApp</span>
             </div>
           </div>
 
@@ -601,6 +657,28 @@ export default function AdminDashboard() {
               <div style={{ flex: 1, minHeight: 0 }}>
                 <AdminsPanel adminKey={adminKey} />
               </div>
+            ) : activeTab === "crm_dashboard" ? (
+              <CrmDashboardPanel adminKey={adminKey} onOpenFollowups={() => setActiveTab("followups")} />
+            ) : activeTab === "contacts" ? (
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <ContactsPanel adminKey={adminKey} />
+              </div>
+            ) : activeTab === "followups" ? (
+              <FollowUpPanel adminKey={adminKey} />
+            ) : activeTab === "insights" ? (
+              <InsightsPanel adminKey={adminKey} />
+            ) : activeTab === "campaigns" ? (
+              <CampaignPanel adminKey={adminKey} />
+            ) : activeTab === "drips" ? (
+              <DripPanel adminKey={adminKey} />
+            ) : activeTab === "analytics" ? (
+              <CampaignAnalyticsPanel adminKey={adminKey} />
+            ) : activeTab === "templates" ? (
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <TemplatesPanel adminKey={adminKey} />
+              </div>
+            ) : activeTab === "crm_settings" ? (
+              <CrmSettingsPanel adminKey={adminKey} />
             ) : activeTab === "settings" ? (
               <WhatsAppOnboardingPanel adminKey={adminKey} />
             ) : (

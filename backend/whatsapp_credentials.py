@@ -12,7 +12,7 @@ logger = logging.getLogger("amc.whatsapp.credentials")
 
 
 def resolve_whatsapp_credentials() -> tuple[str | None, str | None]:
-    """Return (phone_number_id, access_token) for the active coexistence account.
+    """Return (phone_number_id, access_token) for the active Cloud API account.
 
     When an active onboarded account exists in the database, its credentials
     take priority over environment variables. Otherwise falls back to env vars

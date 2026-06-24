@@ -25,6 +25,9 @@ from sqlalchemy.orm import Session
 
 from admin_agent import handle_admin_message, is_admin_phone
 from conversation_models import Conversation, Message
+from crm_scoring import recompute_score
+from crm_service import log_timeline, touch_activity
+import marketing_service
 from database import get_db
 from groq_agent import FALLBACK_ANSWER, groq_rag_answer
 from models import Registration
@@ -32,12 +35,6 @@ from registration_flow import (
     cancel_flow,
     handle_registration_step,
     start_registration_flow,
-)
-from coexistence_webhook_handler import (
-    handle_account_update,
-    handle_contacts_sync,
-    handle_history,
-    handle_message_echoes,
 )
 from whatsapp_messages import (
     handle_registration_check,
@@ -85,6 +82,58 @@ def _save_bot_message(phone: str, body: str, db: Session) -> None:
     except Exception as e:
         logger.error(f"Failed to save bot message for {phone}: {e}")
         db.rollback()
+
+
+def _auto_enroll_new_lead(phone: str, db: Session) -> None:  # type: ignore[empty-body]
+    """Auto-enroll a brand-new lead into active 'new_lead' drip sequences."""
+    from marketing_models import DripSequence
+    from conversation_models import Conversation as _Conv
+
+    conv = db.query(_Conv).filter(_Conv.phone == phone).first()
+    if not conv:
+        return
+    seqs = (
+        db.query(DripSequence)
+        .filter(DripSequence.active.is_(True), DripSequence.trigger_type == "new_lead")
+        .all()
+    )
+    for seq in seqs:
+        if marketing_service.eligible(conv, seq):
+            marketing_service.enroll(db, seq.id, phone)
+
+
+def _crm_after_inbound(phone: str, db: Session, *, first_message: bool) -> None:
+    """CRM side-effects for an inbound message: timeline + heat re-scoring.
+
+    Wrapped so any failure here never breaks the bot's reply path.
+    """
+    try:
+        conv = db.query(Conversation).filter(Conversation.phone == phone).first()
+        if conv is None:
+            return
+        if first_message:
+            log_timeline(db, phone, "conversation_started",
+                         "Conversation started", actor="lead", commit=False)
+        log_timeline(db, phone, "message_received", "Message received",
+                     actor="lead", commit=False)
+        touch_activity(db, conv, commit=False)
+        db.commit()
+        recompute_score(db, phone, actor="system")
+        # Marketing automation: an inbound reply marks campaign replies and
+        # halts any drip sequences configured to stop on reply (Phase 10/11).
+        try:
+            marketing_service.on_reply(db, phone)
+            if first_message:
+                _auto_enroll_new_lead(phone, db)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Marketing reply hook failed for %s: %s", phone, exc)
+            db.rollback()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("CRM post-inbound processing failed for %s: %s", phone, exc)
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 def _flag_conversation(phone: str, db: Session) -> None:
@@ -431,9 +480,21 @@ async def _handle_inbound_messages(value: dict, db: Session) -> None:
         return
 
     message_body = _extract_message_body(message)
+
+    # Was this the contact's first-ever inbound message? (Drives the
+    # "conversation started" timeline event below.)
+    prior_inbound = (
+        db.query(Message)
+        .filter(Message.phone == phone, Message.direction == "in")
+        .first()
+        is not None
+    )
+
     conv, bot_paused = _upsert_conversation_and_save_message(
         phone, message_body, db
     )
+
+    _crm_after_inbound(phone, db, first_message=not prior_inbound)
 
     if bot_paused:
         logger.info("Bot paused for %s, skipping dispatch", phone)
@@ -459,7 +520,7 @@ async def _handle_inbound_messages(value: dict, db: Session) -> None:
 
 @router.post("/webhook/whatsapp")
 async def receive_message(request: Request, db: Session = Depends(get_db)):
-    """Inbound webhook handler for messages and coexistence events.
+    """Inbound webhook handler for WhatsApp Cloud API messages.
 
     Always returns ``{"status": "ok"}`` with HTTP 200, even on internal
     errors — Meta retries non-2xx responses, which we don't want.
@@ -472,15 +533,15 @@ async def receive_message(request: Request, db: Session = Depends(get_db)):
                 value = change.get("value") or {}
 
                 if field == "messages":
-                    await _handle_inbound_messages(value, db)
-                elif field == "smb_message_echoes":
-                    await handle_message_echoes(value, db)
-                elif field == "history":
-                    await handle_history(value, db)
-                elif field == "smb_app_state_sync":
-                    await handle_contacts_sync(value, db)
-                elif field == "account_update":
-                    await handle_account_update(value, db)
+                    # A "messages" change carries either inbound messages or
+                    # delivery-status updates (delivered/read/failed).
+                    if value.get("statuses"):
+                        try:
+                            marketing_service.handle_statuses(db, value.get("statuses") or [])
+                        except Exception as exc:  # pragma: no cover - defensive
+                            logger.warning("handle_statuses failed: %s", exc)
+                    if value.get("messages"):
+                        await _handle_inbound_messages(value, db)
                 else:
                     logger.info("Unhandled webhook field: %s", field)
     except Exception as exc:

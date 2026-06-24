@@ -17,7 +17,13 @@ from database import Base
 
 
 class Conversation(Base):
-    """Tracks a single WhatsApp phone number's conversation state."""
+    """Tracks a single WhatsApp phone number's conversation state.
+
+    This row doubles as the CRM "contact": besides the chat pipeline
+    ``bucket`` it carries lead-management fields (heat score, lead status,
+    AI intelligence, assignment, reminders). All CRM columns are nullable
+    with sane defaults so existing deployments migrate cleanly.
+    """
 
     __tablename__ = "conversations"
 
@@ -35,6 +41,34 @@ class Conversation(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    # --- CRM / lead-management fields (Phase 1) ---------------------------
+    # Product interest bucket, distinct from the pipeline ``bucket`` above.
+    lead_bucket: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="unclassified"
+    )
+    heat_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # JSON-encoded list of {rule, points} explaining the current score.
+    score_reasons: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lead_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="new"
+    )
+    # JSON-encoded list of strings.
+    intent_tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sentiment: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    ai_generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="other")
+    assigned_to: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reminder_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reminder_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reminder_completed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    # JSON-encoded dict for child_age, city, school, interests, etc.
+    custom_fields: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Message(Base):

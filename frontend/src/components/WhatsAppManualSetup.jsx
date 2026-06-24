@@ -46,7 +46,7 @@ export default function WhatsAppManualSetup({ adminKey, status, onSuccess, onErr
   return (
     <div className="mt-6 space-y-5">
       <div className="rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700 px-4 py-3 space-y-2">
-        <p className="font-semibold text-slate-900">Manual setup (no Embedded Signup)</p>
+        <p className="font-semibold text-slate-900">Cloud API setup</p>
         <p>
           Get these from Meta App Dashboard → <strong>Connect on WhatsApp</strong> →{" "}
           <strong>API Setup</strong>:

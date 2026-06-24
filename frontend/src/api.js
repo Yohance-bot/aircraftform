@@ -352,7 +352,7 @@ export async function deleteAdminUser(adminKey, id) {
 }
 
 // ---------------------------------------------------------------------------
-// WhatsApp Business App Coexistence Onboarding
+// WhatsApp Cloud API credential setup
 // ---------------------------------------------------------------------------
 
 async function parseOnboardingError(res, fallback) {
@@ -370,14 +370,6 @@ async function parseOnboardingError(res, fallback) {
     /* ignore */
   }
   throw new Error(detail);
-}
-
-export async function fetchOnboardingConfig() {
-  const res = await fetch(apiUrl("/api/onboarding/config"));
-  if (!res.ok) {
-    throw new Error("WhatsApp onboarding is not configured on the server.");
-  }
-  return res.json();
 }
 
 export async function fetchOnboardingStatus(adminKey) {
@@ -425,67 +417,148 @@ export async function connectWhatsAppFromEnv(adminKey) {
   return res.json();
 }
 
-export async function exchangeOnboardingCode(adminKey, payload) {
-  console.info("[WA onboarding] POST /api/onboarding/exchange-code", {
-    codeLength: payload?.code?.length,
-    redirect_uri_hints: payload?.redirect_uri_hints,
-  });
-  const res = await fetch(apiUrl("/api/onboarding/exchange-code"), {
-    method: "POST",
+// ---------------------------------------------------------------------------
+// CRM — lead management & marketing (Phases 1-18)
+// ---------------------------------------------------------------------------
+
+async function crmFetch(path, adminKey, { method = "GET", body } = {}) {
+  const res = await fetch(apiUrl(`/api/crm${path}`), {
+    method,
     headers: {
-      "Content-Type": "application/json",
       "X-Admin-Key": adminKey,
+      ...(body ? { "Content-Type": "application/json" } : {}),
     },
-    body: JSON.stringify(payload),
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  if (res.status === 401) {
-    throw new Error("Invalid admin key.");
-  }
+  if (res.status === 401) throw new Error("Invalid admin key.");
+  if (res.status === 404) throw new Error("Not found.");
   if (!res.ok) {
-    await parseOnboardingError(res, "Failed to exchange authorization code.");
+    let detail = "Request failed.";
+    try {
+      const data = await res.json();
+      if (data?.detail) detail = typeof data.detail === "string" ? data.detail : detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
   }
+  if (res.status === 204) return null;
   return res.json();
 }
 
-export async function completeOnboarding(adminKey, payload) {
-  console.info("[WA onboarding] POST /api/onboarding/complete", {
-    event: payload?.session_data?.event,
-    waba_id: payload?.session_data?.data?.waba_id,
-    codeLength: payload?.code?.length,
-    staging_session_id: payload?.staging_session_id,
-    discover_assets: payload?.discover_assets,
+function buildQuery(params) {
+  const q = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "" && v !== "all") q.set(k, v);
   });
-  const res = await fetch(apiUrl("/api/onboarding/complete"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Admin-Key": adminKey,
-    },
-    body: JSON.stringify(payload),
-  });
-  if (res.status === 401) {
-    throw new Error("Invalid admin key.");
-  }
-  if (!res.ok) {
-    await parseOnboardingError(res, "WhatsApp onboarding failed.");
-  }
-  return res.json();
+  const s = q.toString();
+  return s ? `?${s}` : "";
 }
 
-export async function reportOnboardingCancel(adminKey, payload) {
-  const res = await fetch(apiUrl("/api/onboarding/cancel"), {
+// Contacts (Phase 6/7)
+export const fetchContacts = (adminKey, filters) =>
+  crmFetch(`/contacts${buildQuery(filters)}`, adminKey);
+export const fetchContact = (adminKey, phone) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}`, adminKey);
+export const updateContact = (adminKey, phone, patch) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}`, adminKey, { method: "PATCH", body: patch });
+export const bulkContactAction = (adminKey, phones, action, value) =>
+  crmFetch(`/contacts/bulk`, adminKey, { method: "POST", body: { phones, action, value } });
+
+// Score (Phase 2)
+export const fetchScore = (adminKey, phone) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/score`, adminKey);
+export const recomputeScore = (adminKey, phone) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/recompute-score`, adminKey, { method: "POST" });
+
+// AI (Phase 3)
+export const refreshAi = (adminKey, phone) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/ai-refresh`, adminKey, { method: "POST" });
+
+// Timeline (Phase 4)
+export const fetchTimeline = (adminKey, phone) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/timeline`, adminKey);
+
+// Reminders (Phase 13)
+export const createReminder = (adminKey, phone, reminderAt, note) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/reminder`, adminKey, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Admin-Key": adminKey,
-    },
-    body: JSON.stringify(payload),
+    body: { reminder_at: reminderAt, reminder_note: note },
   });
-  if (res.status === 401) {
-    throw new Error("Invalid admin key.");
-  }
-  if (!res.ok) {
-    throw new Error("Failed to record cancellation.");
-  }
-  return res.json();
-}
+export const completeReminder = (adminKey, phone) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/reminder/complete`, adminKey, { method: "POST" });
+export const snoozeReminder = (adminKey, phone, days) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/reminder/snooze`, adminKey, {
+    method: "POST",
+    body: { days },
+  });
+
+// Follow-up queue (Phase 8)
+export const fetchFollowups = (adminKey) => crmFetch(`/followups`, adminKey);
+
+// Notes (Phase 14)
+export const fetchNotes = (adminKey, phone) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/notes`, adminKey);
+export const addNote = (adminKey, phone, bodyText, author) =>
+  crmFetch(`/contacts/${encodeURIComponent(phone)}/notes`, adminKey, {
+    method: "POST",
+    body: { body: bodyText, author },
+  });
+export const deleteNote = (adminKey, id) =>
+  crmFetch(`/notes/${id}`, adminKey, { method: "DELETE" });
+
+// Templates (Phase 9)
+export const fetchTemplates = (adminKey) => crmFetch(`/templates`, adminKey);
+export const createTemplate = (adminKey, t) =>
+  crmFetch(`/templates`, adminKey, { method: "POST", body: t });
+export const updateTemplate = (adminKey, id, t) =>
+  crmFetch(`/templates/${id}`, adminKey, { method: "PATCH", body: t });
+export const duplicateTemplate = (adminKey, id) =>
+  crmFetch(`/templates/${id}/duplicate`, adminKey, { method: "POST" });
+export const deleteTemplate = (adminKey, id) =>
+  crmFetch(`/templates/${id}`, adminKey, { method: "DELETE" });
+
+// Agents (Phase 15)
+export const fetchAgents = (adminKey) => crmFetch(`/agents`, adminKey);
+
+// Dashboard / Insights (Phase 5 / 16)
+export const fetchCrmDashboard = (adminKey) => crmFetch(`/dashboard`, adminKey);
+export const fetchInsights = (adminKey) => crmFetch(`/insights`, adminKey);
+
+// Audience targeting (Phase 17)
+export const previewAudience = (adminKey, filters) =>
+  crmFetch(`/audience`, adminKey, { method: "POST", body: filters });
+
+// Settings (Phase 18)
+export const fetchCrmSettings = (adminKey) => crmFetch(`/settings`, adminKey);
+export const updateCrmSetting = (adminKey, key, value) =>
+  crmFetch(`/settings/${key}`, adminKey, { method: "PUT", body: { value } });
+
+// Drip sequences (Phase 10)
+export const fetchSequences = (adminKey) => crmFetch(`/drip/sequences`, adminKey);
+export const fetchSequence = (adminKey, id) => crmFetch(`/drip/sequences/${id}`, adminKey);
+export const createSequence = (adminKey, seq) =>
+  crmFetch(`/drip/sequences`, adminKey, { method: "POST", body: seq });
+export const updateSequence = (adminKey, id, seq) =>
+  crmFetch(`/drip/sequences/${id}`, adminKey, { method: "PATCH", body: seq });
+export const deleteSequence = (adminKey, id) =>
+  crmFetch(`/drip/sequences/${id}`, adminKey, { method: "DELETE" });
+export const activateSequence = (adminKey, id, active) =>
+  crmFetch(`/drip/sequences/${id}/activate`, adminKey, { method: "POST", body: { active } });
+export const enrollSequence = (adminKey, id, payload) =>
+  crmFetch(`/drip/sequences/${id}/enroll`, adminKey, { method: "POST", body: payload });
+export const setSequenceState = (adminKey, id, action) =>
+  crmFetch(`/drip/sequences/${id}/state`, adminKey, { method: "POST", body: { action } });
+export const runDripDue = (adminKey) =>
+  crmFetch(`/drip/run-due`, adminKey, { method: "POST" });
+
+// Campaign analytics (Phase 11)
+export const fetchCampaigns = (adminKey) => crmFetch(`/campaigns`, adminKey);
+export const fetchCampaign = (adminKey, id) => crmFetch(`/campaigns/${id}`, adminKey);
+export const deleteCampaign = (adminKey, id) =>
+  crmFetch(`/campaigns/${id}`, adminKey, { method: "DELETE" });
+
+// Click tracking (Phase 12)
+export const fetchCampaignClicks = (adminKey, id) =>
+  crmFetch(`/campaigns/${id}/clicks`, adminKey);
+export const fetchTrackingOverview = (adminKey) => crmFetch(`/tracking/overview`, adminKey);

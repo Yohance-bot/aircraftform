@@ -15,6 +15,28 @@ from sqlalchemy.orm import Session
 
 from conversation_models import AdminUser, Base as ConvBase  # noqa: F401 — AdminUser ensures table is registered
 from conversations_router import router as conversations_router
+from crm_models import (  # noqa: F401 — ensures CRM tables are registered
+    CrmSetting,
+    LeadNote,
+    MessageTemplate,
+    TimelineEvent,
+)
+from crm_router import router as crm_router
+from marketing_models import (  # noqa: F401 — ensures marketing tables are registered
+    Campaign,
+    CampaignEvent,
+    CampaignMessage,
+    DripEnrollment,
+    DripLog,
+    DripSequence,
+    DripStep,
+    ScheduledMessage,
+    TrackedClick,
+    TrackedLink,
+)
+from marketing_router import router as marketing_router
+from tracking_router import router as tracking_router
+from scheduler import start_scheduler
 from database import Base, engine, get_db
 from knowledge_router import router as knowledge_router, seed_knowledge_if_empty
 from models import Registration
@@ -48,6 +70,15 @@ app.include_router(bot_router)
 app.include_router(conversations_router)
 app.include_router(knowledge_router)
 app.include_router(onboarding_router)
+app.include_router(crm_router)
+app.include_router(marketing_router)
+app.include_router(tracking_router)
+
+
+@app.on_event("startup")
+async def start_drip_scheduler() -> None:
+    """Launch the in-process drip scheduler loop (Phase 10)."""
+    start_scheduler()
 
 
 @app.on_event("startup")
@@ -57,12 +88,51 @@ def on_startup() -> None:
     ConvBase.metadata.create_all(bind=engine)
     ensure_registration_columns()
     ensure_conversation_columns()
+    ensure_crm_columns()
     ensure_onboarding_session_columns()
     db = next(get_db())
     try:
         seed_knowledge_if_empty(db)
     finally:
         db.close()
+
+
+def ensure_crm_columns() -> None:
+    """Add CRM lead-management columns to the conversations table if missing.
+
+    Idempotent and safe across SQLite and Postgres — each column is only
+    added when absent, mirroring the existing migration helpers.
+    """
+    inspector = inspect(engine)
+    if "conversations" not in inspector.get_table_names():
+        return
+
+    existing = {col["name"] for col in inspector.get_columns("conversations")}
+    # (column name, DDL type with default) — kept nullable so old rows migrate.
+    crm_columns = [
+        ("lead_bucket", "VARCHAR(20) DEFAULT 'unclassified'"),
+        ("heat_score", "INTEGER DEFAULT 0"),
+        ("score_reasons", "TEXT"),
+        ("lead_status", "VARCHAR(20) DEFAULT 'new'"),
+        ("intent_tags", "TEXT"),
+        ("ai_summary", "TEXT"),
+        ("ai_recommendation", "TEXT"),
+        ("sentiment", "VARCHAR(10)"),
+        ("ai_generated_at", "TIMESTAMP"),
+        ("source", "VARCHAR(20) DEFAULT 'other'"),
+        ("assigned_to", "VARCHAR(200)"),
+        ("last_activity_at", "TIMESTAMP"),
+        ("reminder_at", "TIMESTAMP"),
+        ("reminder_note", "TEXT"),
+        ("reminder_completed", "BOOLEAN DEFAULT FALSE"),
+        ("custom_fields", "TEXT"),
+    ]
+    with engine.begin() as conn:
+        for name, ddl in crm_columns:
+            if name not in existing:
+                conn.execute(
+                    text(f"ALTER TABLE conversations ADD COLUMN {name} {ddl}")
+                )
 
 
 def ensure_onboarding_session_columns() -> None:

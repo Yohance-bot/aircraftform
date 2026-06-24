@@ -225,6 +225,29 @@ async def send_text(phone: str, message: str) -> None:
     await send_whatsapp(payload)
 
 
+async def send_text_tracked(phone: str, message: str) -> str | None:
+    """Like :func:`send_text` but returns the WhatsApp message id (wamid).
+
+    Used by campaign/drip senders that need to correlate outbound messages
+    with delivery-status webhooks. Returns ``None`` if the send failed or was
+    captured in dry-run mode. ``preview_url`` is enabled so tracked links
+    render with a preview card.
+    """
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": phone,
+        "type": "text",
+        "text": {"body": message, "preview_url": True},
+    }
+    resp = await send_whatsapp(payload)
+    if isinstance(resp, dict):
+        try:
+            return resp["messages"][0]["id"]
+        except (KeyError, IndexError, TypeError):
+            return None
+    return None
+
+
 async def send_back_to_menu_button(phone: str) -> None:
     payload = {
         "messaging_product": "whatsapp",
