@@ -366,3 +366,127 @@ def list_registrations(db: Session = Depends(get_db)) -> list[Registration]:
         .order_by(Registration.created_at.desc())
         .all()
     )
+
+
+class RegistrationCreate(BaseModel):
+    parent_name: str = Field(..., min_length=1, max_length=200)
+    child_name: str = Field(..., min_length=1, max_length=200)
+    phone: str = Field(..., min_length=1, max_length=50)
+    phone_country_code: str | None = Field(default=None, max_length=10)
+    email: str | None = Field(default=None, max_length=200)
+    age_group: str = Field(default="TBD", max_length=50)
+    class_grade: str = Field(default="TBD", max_length=50)
+    villa_flat_number: str | None = Field(default=None, max_length=100)
+    special_requirements: str | None = None
+    batch_preference: str | None = Field(default=None, max_length=100)
+    timing_slot: str | None = Field(default=None, max_length=50)
+    society: str | None = Field(default=None, max_length=100)
+    payment_status: str = Field(default="pending", max_length=30)
+
+
+@app.post(
+    "/api/registrations",
+    response_model=RegistrationOut,
+    dependencies=[Depends(require_admin)],
+)
+def create_registration(payload: RegistrationCreate, db: Session = Depends(get_db)) -> Registration:
+    if payload.payment_status not in {"pending", "confirmed"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="payment_status must be pending or confirmed.",
+        )
+
+    phone = re.sub(r"\s+", "", payload.phone.strip())
+    country = (payload.phone_country_code or "").strip()
+    if country and not phone.startswith("+"):
+        phone = re.sub(r"\s+", "", country) + phone.lstrip("0")
+
+    record = Registration(
+        parent_name=payload.parent_name.strip(),
+        child_name=payload.child_name.strip(),
+        phone_country_code=country or None,
+        phone=phone,
+        email=(payload.email or "").strip() or None,
+        age_group=payload.age_group.strip() or "TBD",
+        class_grade=payload.class_grade.strip() or "TBD",
+        villa_flat_number=(payload.villa_flat_number or "").strip() or None,
+        special_requirements=(payload.special_requirements or "").strip() or None,
+        batch_preference=(payload.batch_preference or "").strip() or None,
+        timing_slot=(payload.timing_slot or "").strip() or None,
+        society=(payload.society or "").strip() or None,
+        payment_status=payload.payment_status,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+class RegistrationUpdate(BaseModel):
+    parent_name: str | None = Field(default=None, max_length=200)
+    child_name: str | None = Field(default=None, max_length=200)
+    phone_country_code: str | None = Field(default=None, max_length=10)
+    phone: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=200)
+    age_group: str | None = Field(default=None, max_length=50)
+    class_grade: str | None = Field(default=None, max_length=50)
+    villa_flat_number: str | None = Field(default=None, max_length=100)
+    special_requirements: str | None = None
+    batch_preference: str | None = Field(default=None, max_length=100)
+    timing_slot: str | None = Field(default=None, max_length=50)
+    society: str | None = Field(default=None, max_length=100)
+    payment_status: str | None = Field(default=None, max_length=30)
+
+
+@app.patch(
+    "/api/registrations/{registration_id}",
+    response_model=RegistrationOut,
+    dependencies=[Depends(require_admin)],
+)
+def update_registration(
+    registration_id: int,
+    payload: RegistrationUpdate,
+    db: Session = Depends(get_db),
+) -> Registration:
+    record = db.get(Registration, registration_id)
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
+
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        return record
+
+    nullable_text = {
+        "phone_country_code", "email", "villa_flat_number",
+        "special_requirements", "batch_preference", "timing_slot", "society",
+    }
+    for key, value in updates.items():
+        if key in nullable_text and isinstance(value, str) and not value.strip():
+            setattr(record, key, None)
+        elif isinstance(value, str):
+            setattr(record, key, value.strip())
+        else:
+            setattr(record, key, value)
+
+    if "payment_status" in updates and record.payment_status not in {"pending", "confirmed"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="payment_status must be pending or confirmed.",
+        )
+
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@app.delete(
+    "/api/registrations/{registration_id}",
+    dependencies=[Depends(require_admin)],
+)
+def delete_registration(registration_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
+    record = db.get(Registration, registration_id)
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
+    db.delete(record)
+    db.commit()
+    return {"success": True}

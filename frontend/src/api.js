@@ -67,6 +67,74 @@ export async function fetchRegistrations(adminKey) {
   return res.json();
 }
 
+export async function updateRegistration(adminKey, id, fields) {
+  const res = await fetch(apiUrl(`/api/registrations/${id}`), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify(fields),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    let detail = "Could not save registration.";
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = String(body.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+export async function deleteRegistration(adminKey, id) {
+  const res = await fetch(apiUrl(`/api/registrations/${id}`), {
+    method: "DELETE",
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    throw new Error("Could not delete registration.");
+  }
+  return res.json();
+}
+
+export async function createRegistration(adminKey, data) {
+  const res = await fetch(apiUrl("/api/registrations"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Key": adminKey,
+    },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) {
+    throw new Error("Invalid admin key.");
+  }
+  if (!res.ok) {
+    let detail = "Could not create registration.";
+    try {
+      const body = await res.json();
+      if (body?.detail) {
+        detail = Array.isArray(body.detail)
+          ? body.detail.map((d) => d.msg || JSON.stringify(d)).join(", ")
+          : String(body.detail);
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
 export async function testBot({ message, phone, dryRun }, adminKey) {
   const res = await fetch(apiUrl("/api/test-bot"), {
     method: "POST",

@@ -6,6 +6,7 @@ import AdminsPanel from "./AdminsPanel.jsx";
 import BroadcastPanel from "./BroadcastPanel.jsx";
 import ConversationsPanel from "./ConversationsPanel.jsx";
 import KnowledgePanel from "./KnowledgePanel.jsx";
+import RegistrationsPanel from "./RegistrationsPanel.jsx";
 import WhatsAppOnboardingPanel from "./WhatsAppOnboardingPanel.jsx";
 import CrmDashboardPanel from "./crm/CrmDashboardPanel.jsx";
 import ContactsPanel from "./crm/ContactsPanel.jsx";
@@ -16,24 +17,6 @@ import DripPanel from "./crm/DripPanel.jsx";
 import CampaignAnalyticsPanel from "./crm/CampaignAnalyticsPanel.jsx";
 import InsightsPanel from "./crm/InsightsPanel.jsx";
 import CrmSettingsPanel from "./crm/CrmSettingsPanel.jsx";
-
-// Columns shown in the on-screen table.
-const COLUMNS = [
-  { key: "society", label: "Society" },
-  { key: "parent_name", label: "Parent" },
-  { key: "child_name", label: "Child" },
-  { key: "phone_country_code", label: "Country Code" },
-  { key: "phone", label: "Phone" },
-  { key: "email", label: "Email" },
-  { key: "age_group", label: "Age Group" },
-  { key: "class_grade", label: "Class" },
-  { key: "timing_slot", label: "Timing" },
-  { key: "villa_flat_number", label: "Villa" },
-  { key: "batch_preference", label: "Batch" },
-  { key: "special_requirements", label: "Special Requirements" },
-  { key: "payment_status", label: "Payment" },
-  { key: "created_at", label: "Registered At" },
-];
 
 // CSV export has its own explicit column order & labels (per spec).
 const CSV_COLUMNS = [
@@ -99,6 +82,7 @@ const FULL_HEIGHT_TABS = new Set([
   "contacts",
   "templates",
   "drips",
+  "registrations",
 ]);
 // Tabs that render their own layout and shouldn't get the sky header / stat row.
 const CRM_TABS = new Set([
@@ -379,7 +363,7 @@ export default function AdminDashboard() {
 
   const confirmedCount = rows.filter(r => r.payment_status === "confirmed").length;
   const isFullHeightTab = FULL_HEIGHT_TABS.has(activeTab);
-  const showSkyHeader = activeTab === "dashboard" || activeTab === "registrations";
+  const showSkyHeader = activeTab === "dashboard";
 
   return (
     <>
@@ -607,7 +591,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {(activeTab === 'dashboard' || activeTab === 'registrations') && (
+          {activeTab === "dashboard" && (
             <div className="stats-row" style={{
               display: "flex",
               gap: "16px",
@@ -623,14 +607,15 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Tab Content */}
+          {/* Tab Content — flex column only for full-height tabs; scroll tabs use block layout so content isn't clipped */}
           <div className="dashboard-root" style={{
             flex: 1,
             overflow: isFullHeightTab ? "hidden" : "auto",
+            overflowY: isFullHeightTab ? "hidden" : "auto",
             padding: activeTab === "conversations" ? 0 : "14px 18px",
-            display: "flex",
-            flexDirection: "column",
-            minHeight: 0
+            display: isFullHeightTab ? "flex" : "block",
+            flexDirection: isFullHeightTab ? "column" : undefined,
+            minHeight: 0,
           }}>
             {activeTab === "dashboard" ? (
               <DashboardHome
@@ -681,134 +666,19 @@ export default function AdminDashboard() {
               <CrmSettingsPanel adminKey={adminKey} />
             ) : activeTab === "settings" ? (
               <WhatsAppOnboardingPanel adminKey={adminKey} />
-            ) : (
-              <>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-                  <div>
-                    <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "#1e293b" }}>Registrations</h2>
-                    <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
-                      Total: <span style={{ fontWeight: 600 }}>{rows.length}</span>
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      type="button"
-                      onClick={handleRefresh}
-                      disabled={loading}
-                      style={{
-                        height: "36px",
-                        padding: "0 16px",
-                        borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
-                        background: "#fff",
-                        color: "#475569",
-                        fontWeight: 600,
-                        fontSize: "13px",
-                        cursor: loading ? "not-allowed" : "pointer"
-                      }}
-                    >
-                      {loading ? "Refreshing..." : "Refresh"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleExportCsv}
-                      disabled={!rows.length}
-                      style={{
-                        height: "36px",
-                        padding: "0 16px",
-                        borderRadius: "8px",
-                        border: "1px solid #f59e0b",
-                        background: "#fff",
-                        color: "#f59e0b",
-                        fontWeight: 600,
-                        fontSize: "13px",
-                        cursor: !rows.length ? "not-allowed" : "pointer",
-                        opacity: !rows.length ? 0.5 : 1
-                      }}
-                    >
-                      Export CSV
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <div style={{
-                    marginBottom: "16px",
-                    padding: "12px",
-                    borderRadius: "8px",
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    color: "#dc2626",
-                    fontSize: "14px"
-                  }}>
-                    {error}
-                  </div>
-                )}
-
-                <div style={{
-                  background: "#fff",
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
-                  overflow: "hidden"
-                }}>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                      <thead>
-                        <tr style={{ background: "#f8fafc" }}>
-                          {COLUMNS.map((c) => (
-                            <th
-                              key={c.key}
-                              style={{
-                                textAlign: "left",
-                                fontWeight: 600,
-                                padding: "12px 16px",
-                                whiteSpace: "nowrap",
-                                color: "#475569",
-                                borderBottom: "1px solid #e2e8f0"
-                              }}
-                            >
-                              {c.label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={COLUMNS.length}
-                              style={{ padding: "40px 16px", textAlign: "center", color: "#64748b" }}
-                            >
-                              No registrations yet.
-                            </td>
-                          </tr>
-                        ) : (
-                          rows.map((r) => (
-                            <tr key={r.id} style={{ borderTop: "1px solid #f1f5f9" }}>
-                              {COLUMNS.map((c) => (
-                                <td
-                                  key={c.key}
-                                  style={{
-                                    padding: "12px 16px",
-                                    color: "#334155",
-                                    whiteSpace: c.key === "special_requirements" ? "normal" : "nowrap",
-                                    minWidth: c.key === "special_requirements" ? "280px" : undefined,
-                                    maxWidth: c.key === "special_requirements" ? "400px" : undefined,
-                                    verticalAlign: c.key === "special_requirements" ? "top" : undefined
-                                  }}
-                                >
-                                  {formatCell(c.key, r[c.key])}
-                                </td>
-                              ))}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </>
-            )}
+            ) : activeTab === "registrations" ? (
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <RegistrationsPanel
+                  adminKey={adminKey}
+                  rows={rows}
+                  setRows={setRows}
+                  loading={loading}
+                  error={error}
+                  onRefresh={handleRefresh}
+                  onExport={handleExportCsv}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1147,51 +1017,6 @@ function StatCard({ accent, Icon, value, label }) {
       </div>
     </div>
   );
-}
-
-function formatCell(key, value) {
-  if (value === null || value === undefined || value === "") return "—";
-  if (key === "created_at") {
-    try {
-      return new Date(value).toLocaleString();
-    } catch {
-      return String(value);
-    }
-  }
-  if (key === "society") {
-    const isPalm = value === "palm-meadows";
-    const isPrestige = value === "prestige-white-meadows";
-    const color = isPalm
-      ? "bg-orange-100 text-orange-700"
-      : isPrestige
-      ? "bg-slate-200 text-slate-700"
-      : "bg-gray-100 text-gray-600";
-    const label = isPalm ? "Palm Meadows" : isPrestige ? "Prestige WM" : value;
-    return (
-      <span
-        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${color}`}
-      >
-        {label}
-      </span>
-    );
-  }
-  if (key === "payment_status") {
-    const color =
-      value === "confirmed"
-        ? "bg-green-100 text-green-700"
-        : "bg-amber-100 text-amber-700";
-    return (
-      <span
-        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${color}`}
-      >
-        {value}
-      </span>
-    );
-  }
-  if (key === "special_requirements") {
-    return String(value);
-  }
-  return String(value);
 }
 
 // Every field — including headers — is wrapped in double quotes, and any
