@@ -186,19 +186,39 @@ function ProcessingView({ status, progress, error }) {
   );
 }
 
+function normalizeAnalysisPayload(data) {
+  if (!data || typeof data !== "object") return null;
+  let analysis = data.analysis;
+  if (typeof analysis === "string") {
+    try {
+      analysis = JSON.parse(analysis);
+    } catch {
+      analysis = {};
+    }
+  }
+  return {
+    ...data,
+    analysis: analysis && typeof analysis === "object" ? analysis : {},
+  };
+}
+
 function ResultsView({ data, onReset }) {
   const [showTranscript, setShowTranscript] = useState(false);
-  const analysis = data?.analysis || {};
+  const normalized = normalizeAnalysisPayload(data);
+  const analysis = normalized?.analysis || {};
   const categories = analysis.categories || {};
-  const overall = data?.overall_score ?? analysis.overall_score ?? 0;
+  const overall = normalized?.overall_score ?? analysis.overall_score ?? 0;
+  const summary = normalized?.summary || analysis.executive_summary || "";
+
+  if (!normalized) return null;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">{data.title}</h2>
+          <h2 className="text-xl font-bold text-slate-900">{normalized.title}</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Trainer: <span className="font-medium text-slate-700">{data.trainer}</span>
+            Trainer: <span className="font-medium text-slate-700">{normalized.trainer}</span>
           </p>
         </div>
         <button
@@ -225,7 +245,7 @@ function ResultsView({ data, onReset }) {
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-6">
           <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-400">Executive Summary</h3>
-          <p className="text-sm leading-relaxed text-slate-700">{data.summary || analysis.executive_summary}</p>
+          <p className="text-sm leading-relaxed text-slate-700">{summary}</p>
         </div>
       </div>
 
@@ -241,7 +261,7 @@ function ResultsView({ data, onReset }) {
         {showTranscript && (
           <div className="max-h-64 overflow-y-auto border-t border-slate-100 px-5 py-4">
             <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-600">
-              {data.transcript || "No transcript available."}
+              {normalized.transcript || "No transcript available."}
             </pre>
           </div>
         )}
@@ -340,7 +360,7 @@ export default function WorkshopAnalysisPanel({ adminKey }) {
     }
   }
 
-  // Poll processing status every 5s
+  // Poll processing status every 5s until COMPLETED or FAILED
   useEffect(() => {
     if (phase !== "processing" || !workshopId) return undefined;
 
@@ -353,25 +373,13 @@ export default function WorkshopAnalysisPanel({ adminKey }) {
         setStatus(data);
 
         if (data.status === "COMPLETED") {
-          if (!cancelled) setPhase("loading_results");
-          try {
-            const analysis = await fetchWorkshopAnalysis(adminKey, workshopId);
-            if (!cancelled) {
-              setResults(analysis);
-              setPhase("results");
-            }
-          } catch (err) {
-            if (!cancelled) {
-              setFormError(err?.message || "Could not load analysis.");
-              setPhase("failed");
-            }
-          }
+          setPhase("loading_results");
           return;
         }
 
         if (data.status === "FAILED") {
+          setFormError(data.error || "Processing failed.");
           setPhase("failed");
-          return;
         }
       } catch (err) {
         if (!cancelled) {
@@ -386,6 +394,32 @@ export default function WorkshopAnalysisPanel({ adminKey }) {
     return () => {
       cancelled = true;
       clearInterval(id);
+    };
+  }, [phase, workshopId, adminKey]);
+
+  // Fetch analysis in a separate effect so polling cleanup cannot cancel the request
+  useEffect(() => {
+    if (phase !== "loading_results" || !workshopId) return undefined;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const analysis = await fetchWorkshopAnalysis(adminKey, workshopId);
+        if (cancelled) return;
+        setResults(analysis);
+        setFormError("");
+        setPhase("results");
+      } catch (err) {
+        if (!cancelled) {
+          setFormError(err?.message || "Could not load analysis.");
+          setPhase("failed");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
     };
   }, [phase, workshopId, adminKey]);
 
@@ -539,6 +573,12 @@ export default function WorkshopAnalysisPanel({ adminKey }) {
 
       {phase === "results" && results && (
         <ResultsView data={results} onReset={reset} />
+      )}
+
+      {phase === "results" && !results && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Analysis loaded but no data was returned. Try refreshing or analyze another workshop.
+        </div>
       )}
     </div>
   );
