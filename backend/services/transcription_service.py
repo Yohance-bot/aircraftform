@@ -43,18 +43,32 @@ def transcribe_file(path: Path) -> str:
     """Transcribe a single audio chunk with retry/backoff."""
     if not path.exists():
         raise TranscriptionError(f"Audio file not found: {path}")
-    if path.stat().st_size == 0:
+    chunk_bytes = path.stat().st_size
+    if chunk_bytes == 0:
         raise TranscriptionError(f"Audio file is empty: {path}")
-    if path.stat().st_size > GROQ_MAX_BYTES:
+    if chunk_bytes > GROQ_MAX_BYTES:
         raise TranscriptionError(
-            f"Audio chunk exceeds Groq upload limit ({path.stat().st_size} bytes)."
+            f"Audio chunk exceeds Groq upload limit ({chunk_bytes} bytes)."
         )
 
+    logger.info(
+        "[transcription] Transcribing %s (%s bytes, model=%s, max_retries=%s)",
+        path.name,
+        chunk_bytes,
+        WHISPER_MODEL,
+        MAX_RETRIES,
+    )
     client = _client()
     last_error: Exception | None = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
+            logger.info(
+                "[transcription] API call attempt %s/%s for %s",
+                attempt,
+                MAX_RETRIES,
+                path.name,
+            )
             with path.open("rb") as audio_file:
                 result = client.audio.transcriptions.create(
                     file=audio_file,
@@ -66,17 +80,28 @@ def transcribe_file(path: Path) -> str:
             text = _extract_text(result)
             if not text:
                 raise TranscriptionError("Groq returned an empty transcript.")
+            logger.info(
+                "[transcription] Success for %s (%s chars on attempt %s)",
+                path.name,
+                len(text),
+                attempt,
+            )
             return text
         except TranscriptionError:
             raise
         except Exception as exc:  # pragma: no cover - network/API variability
             last_error = exc
-            logger.warning(
-                "Transcription attempt %s/%s failed for %s: %s",
-                attempt, MAX_RETRIES, path.name, exc,
+            logger.exception(
+                "[transcription] Attempt %s/%s failed for %s: %s",
+                attempt,
+                MAX_RETRIES,
+                path.name,
+                exc,
             )
             if attempt < MAX_RETRIES:
-                time.sleep(RETRY_BASE_DELAY * attempt)
+                delay = RETRY_BASE_DELAY * attempt
+                logger.info("[transcription] Retrying in %.1fs", delay)
+                time.sleep(delay)
 
     raise TranscriptionError(
         f"Transcription failed after {MAX_RETRIES} attempts: {last_error}"
@@ -92,13 +117,16 @@ def transcribe_chunks(
     if not chunk_paths:
         raise TranscriptionError("No audio chunks to transcribe.")
 
+    logger.info("[transcription] Starting batch transcription (%s chunks)", len(chunk_paths))
     parts: list[str] = []
     total = len(chunk_paths)
 
     for index, chunk_path in enumerate(chunk_paths, start=1):
-        logger.info("Transcribing chunk %s/%s (%s)", index, total, chunk_path.name)
+        logger.info("[transcription] Processing chunk %s/%s (%s)", index, total, chunk_path.name)
         parts.append(transcribe_file(chunk_path))
         if on_chunk_complete:
             on_chunk_complete(index, total)
 
-    return "\n\n".join(part for part in parts if part.strip())
+    merged = "\n\n".join(part for part in parts if part.strip())
+    logger.info("[transcription] Batch complete (%s chars total)", len(merged))
+    return merged

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from datetime import datetime
@@ -38,6 +39,7 @@ from marketing_router import router as marketing_router
 from tracking_router import router as tracking_router
 from scheduler import start_scheduler
 from workshop_service import ensure_upload_dirs
+from services.ffmpeg_service import ffmpeg_available
 from database import Base, engine, get_db
 from knowledge_router import router as knowledge_router, seed_knowledge_if_empty
 from models import Registration
@@ -53,6 +55,13 @@ from webhook_router import router as webhook_router
 from bot_router import router as bot_router
 
 ADMIN_KEY = os.getenv("ADMIN_KEY", "change-me-before-deploy")
+
+_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, _LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger("amc.main")
 
 AgeGroup = Literal["6-9 years", "10-14 years"]
 PrestigeAgeGroup = Literal["Age 5-8", "Age 9-14"]
@@ -88,6 +97,7 @@ async def start_drip_scheduler() -> None:
 @app.on_event("startup")
 def on_startup() -> None:
     """Create tables on startup if they don't already exist."""
+    logger.info("Application startup — configuring workshop pipeline")
     Base.metadata.create_all(bind=engine)
     ConvBase.metadata.create_all(bind=engine)
     ensure_registration_columns()
@@ -96,6 +106,7 @@ def on_startup() -> None:
     ensure_onboarding_session_columns()
     ensure_workshop_columns()
     ensure_upload_dirs()
+    logger.info("Workshop upload dirs ready; FFmpeg available=%s", ffmpeg_available())
     db = next(get_db())
     try:
         seed_knowledge_if_empty(db)

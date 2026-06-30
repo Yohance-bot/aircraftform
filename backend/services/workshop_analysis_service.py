@@ -187,6 +187,12 @@ def _call_groq(*, title: str, trainer: str, transcript: str) -> str:
         {"role": "system", "content": _build_system_prompt()},
         {"role": "user", "content": _build_user_prompt(title=title, trainer=trainer, transcript=transcript)},
     ]
+    logger.info(
+        "[workshop.analysis] Calling Groq chat model=%s title=%r transcript_chars=%s",
+        CHAT_MODEL,
+        title,
+        len(transcript),
+    )
     try:
         response = client.chat.completions.create(
             model=CHAT_MODEL,
@@ -196,7 +202,7 @@ def _call_groq(*, title: str, trainer: str, transcript: str) -> str:
             response_format={"type": "json_object"},
         )
     except TypeError:
-        # Older Groq SDK may not accept response_format.
+        logger.info("[workshop.analysis] Retrying without response_format (older SDK)")
         response = client.chat.completions.create(
             model=CHAT_MODEL,
             messages=messages,
@@ -206,6 +212,7 @@ def _call_groq(*, title: str, trainer: str, transcript: str) -> str:
     except Exception as exc:
         msg = str(exc).lower()
         if "response_format" in msg:
+            logger.info("[workshop.analysis] Retrying without response_format (API rejection)")
             try:
                 response = client.chat.completions.create(
                     model=CHAT_MODEL,
@@ -214,18 +221,23 @@ def _call_groq(*, title: str, trainer: str, transcript: str) -> str:
                     max_tokens=4000,
                 )
             except Exception as retry_exc:
+                logger.exception("[workshop.analysis] Groq chat completion failed on retry")
                 raise AnalysisError(f"Groq chat completion failed: {retry_exc}") from retry_exc
         else:
+            logger.exception("[workshop.analysis] Groq chat completion failed")
             raise AnalysisError(f"Groq chat completion failed: {exc}") from exc
 
     content = ""
     try:
         content = response.choices[0].message.content or ""
     except (AttributeError, IndexError, TypeError) as exc:
+        logger.exception("[workshop.analysis] Unexpected Groq response shape")
         raise AnalysisError(f"Unexpected Groq response shape: {exc}") from exc
 
     if not content.strip():
+        logger.error("[workshop.analysis] Groq returned empty content")
         raise AnalysisError("Groq returned an empty analysis response.")
+    logger.info("[workshop.analysis] Groq response received (%s chars)", len(content))
     return content
 
 
@@ -244,7 +256,7 @@ def analyze_transcript(
 
     for attempt in range(1, 3):
         logger.info(
-            "Workshop analysis attempt %s/2 (title=%r, transcript_chars=%s)",
+            "[workshop.analysis] Evaluation attempt %s/2 title=%r transcript_chars=%s",
             attempt, title, len(trimmed),
         )
         try:
@@ -252,7 +264,7 @@ def analyze_transcript(
         except AnalysisError:
             raise
         except Exception as exc:  # pragma: no cover - network/API variability
-            logger.exception("Groq analysis call failed on attempt %s: %s", attempt, exc)
+            logger.exception("[workshop.analysis] Groq analysis call failed on attempt %s", attempt)
             if attempt == 2:
                 raise AnalysisError(f"Groq analysis failed: {exc}") from exc
             continue
@@ -266,7 +278,8 @@ def analyze_transcript(
         validated = validate_analysis(parsed)
         if validated is not None:
             logger.info(
-                "Workshop analysis succeeded (overall_score=%s)", validated["overall_score"]
+                "[workshop.analysis] Validation succeeded overall_score=%s",
+                validated["overall_score"],
             )
             return validated
 
