@@ -4,3 +4,4 @@ __pycache__/
 registrations.db
 .venv
 venv
+uploads/

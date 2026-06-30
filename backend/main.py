@@ -37,6 +37,7 @@ from marketing_models import (  # noqa: F401 — ensures marketing tables are re
 from marketing_router import router as marketing_router
 from tracking_router import router as tracking_router
 from scheduler import start_scheduler
+from workshop_service import ensure_upload_dirs
 from database import Base, engine, get_db
 from knowledge_router import router as knowledge_router, seed_knowledge_if_empty
 from models import Registration
@@ -46,6 +47,8 @@ from onboarding_models import (  # noqa: F401 — ensures tables are registered
 )
 from onboarding_router import router as onboarding_router
 from registration_flow import RegistrationSession  # noqa: F401 — ensures table is registered
+from workshop_models import Workshop  # noqa: F401 — ensures workshops table is registered
+from workshop_router import router as workshop_router
 from webhook_router import router as webhook_router
 from bot_router import router as bot_router
 
@@ -73,6 +76,7 @@ app.include_router(onboarding_router)
 app.include_router(crm_router)
 app.include_router(marketing_router)
 app.include_router(tracking_router)
+app.include_router(workshop_router)
 
 
 @app.on_event("startup")
@@ -90,6 +94,8 @@ def on_startup() -> None:
     ensure_conversation_columns()
     ensure_crm_columns()
     ensure_onboarding_session_columns()
+    ensure_workshop_columns()
+    ensure_upload_dirs()
     db = next(get_db())
     try:
         seed_knowledge_if_empty(db)
@@ -157,6 +163,24 @@ def ensure_onboarding_session_columns() -> None:
                     "ALTER TABLE whatsapp_onboarding_sessions ADD COLUMN token_exchanged_at TIMESTAMP"
                 )
             )
+
+
+def ensure_workshop_columns() -> None:
+    """Add AI analysis columns to workshops if missing (existing deployments)."""
+    inspector = inspect(engine)
+    if "workshops" not in inspector.get_table_names():
+        return
+
+    existing = {col["name"] for col in inspector.get_columns("workshops")}
+    columns = [
+        ("overall_score", "REAL"),
+        ("summary", "TEXT"),
+        ("analysis_json", "TEXT"),
+    ]
+    with engine.begin() as conn:
+        for name, ddl in columns:
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE workshops ADD COLUMN {name} {ddl}"))
 
 
 def ensure_conversation_columns() -> None:

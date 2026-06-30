@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Shield, Settings, CheckCircle, Download, Gauge, Contact, Bell, TrendingUp, Megaphone, FileText, ClipboardCheck, SlidersHorizontal, Smartphone, GitBranch, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Shield, Settings, CheckCircle, Download, Gauge, Contact, Bell, TrendingUp, Megaphone, FileText, ClipboardCheck, SlidersHorizontal, Smartphone, GitBranch, BarChart3, Sparkles } from 'lucide-react';
 
 import { fetchConversations, fetchRegistrations } from "../api.js";
 import AdminsPanel from "./AdminsPanel.jsx";
@@ -17,6 +17,7 @@ import DripPanel from "./crm/DripPanel.jsx";
 import CampaignAnalyticsPanel from "./crm/CampaignAnalyticsPanel.jsx";
 import InsightsPanel from "./crm/InsightsPanel.jsx";
 import CrmSettingsPanel from "./crm/CrmSettingsPanel.jsx";
+import WorkshopAnalysisPanel from "./workshop/WorkshopAnalysisPanel.jsx";
 
 // CSV export has its own explicit column order & labels (per spec).
 const CSV_COLUMNS = [
@@ -69,6 +70,8 @@ const NAV_ITEMS = [
   { id: "analytics", Icon: BarChart3, label: "Campaign Analytics" },
   { id: "templates", Icon: FileText, label: "Templates" },
   { id: "knowledge", Icon: BookOpen, label: "Knowledge" },
+  { section: "AI" },
+  { id: "workshop_ai", Icon: Sparkles, label: "Workshop AI Analysis" },
   { section: "Team" },
   { id: "admins", Icon: Shield, label: "Admins" },
 ];
@@ -83,6 +86,7 @@ const FULL_HEIGHT_TABS = new Set([
   "templates",
   "drips",
   "registrations",
+  "workshop_ai",
 ]);
 // Tabs that render their own layout and shouldn't get the sky header / stat row.
 const CRM_TABS = new Set([
@@ -95,6 +99,7 @@ const CRM_TABS = new Set([
   "drips",
   "analytics",
   "crm_settings",
+  "workshop_ai",
 ]);
 
 const SIDEBAR_STYLES = `
@@ -637,6 +642,10 @@ export default function AdminDashboard() {
             ) : activeTab === "knowledge" ? (
               <div style={{ flex: 1, minHeight: 0 }}>
                 <KnowledgePanel adminKey={adminKey} />
+              </div>
+            ) : activeTab === "workshop_ai" ? (
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <WorkshopAnalysisPanel adminKey={adminKey} />
               </div>
             ) : activeTab === "admins" ? (
               <div style={{ flex: 1, minHeight: 0 }}>

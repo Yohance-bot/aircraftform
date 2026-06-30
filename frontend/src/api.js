@@ -630,3 +630,108 @@ export const deleteCampaign = (adminKey, id) =>
 export const fetchCampaignClicks = (adminKey, id) =>
   crmFetch(`/campaigns/${id}/clicks`, adminKey);
 export const fetchTrackingOverview = (adminKey) => crmFetch(`/tracking/overview`, adminKey);
+
+// ---------------------------------------------------------------------------
+// Workshop AI Analysis
+// ---------------------------------------------------------------------------
+
+const WORKSHOP_VIDEO_EXTENSIONS = new Set([
+  ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".mpeg", ".mpg",
+]);
+
+export function validateWorkshopVideoFile(file) {
+  if (!file) return "Please select a video file.";
+  const ext = `.${(file.name.split(".").pop() || "").toLowerCase()}`;
+  if (!WORKSHOP_VIDEO_EXTENSIONS.has(ext)) {
+    return `Unsupported format. Use: ${[...WORKSHOP_VIDEO_EXTENSIONS].join(", ")}`;
+  }
+  if (file.size === 0) return "Video file is empty.";
+  return null;
+}
+
+async function workshopFetch(path, adminKey, { method = "GET" } = {}) {
+  const res = await fetch(apiUrl(`/api/admin/workshops${path}`), {
+    method,
+    headers: { "X-Admin-Key": adminKey },
+  });
+  if (res.status === 401) throw new Error("Invalid admin key.");
+  if (res.status === 404) throw new Error("Workshop not found.");
+  if (res.status === 409) {
+    let detail = "Analysis is not ready yet.";
+    try {
+      const data = await res.json();
+      if (data?.detail) {
+        detail = typeof data.detail === "string"
+          ? data.detail
+          : data.detail?.message || detail;
+      }
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(detail);
+    err.status = 409;
+    throw err;
+  }
+  if (!res.ok) {
+    let detail = "Request failed.";
+    try {
+      const data = await res.json();
+      if (data?.detail) {
+        detail = typeof data.detail === "string"
+          ? data.detail
+          : JSON.stringify(data.detail);
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+export function uploadWorkshop(adminKey, { title, trainer, workshop_date, video }, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    form.append("title", title);
+    form.append("trainer", trainer);
+    form.append("workshop_date", workshop_date);
+    form.append("video", video);
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      let body = null;
+      try {
+        body = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        /* ignore */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body);
+        return;
+      }
+      const detail = body?.detail
+        ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail))
+        : `Upload failed (${xhr.status}).`;
+      reject(new Error(detail));
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("Network error during upload.")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload cancelled.")));
+
+    xhr.open("POST", apiUrl("/api/admin/workshops/upload"));
+    xhr.setRequestHeader("X-Admin-Key", adminKey);
+    xhr.send(form);
+  });
+}
+
+export const fetchWorkshopStatus = (adminKey, workshopId) =>
+  workshopFetch(`/${workshopId}/status`, adminKey);
+
+export const fetchWorkshopAnalysis = (adminKey, workshopId) =>
+  workshopFetch(`/${workshopId}/analysis`, adminKey);
