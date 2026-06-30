@@ -292,7 +292,7 @@ def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
         )
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
