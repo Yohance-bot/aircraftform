@@ -1,22 +1,30 @@
-import StoreLayout from "../components/site/StoreLayout.jsx";
-import Hero from "../sections/Hero.jsx";
-import BrandMarquee from "../sections/BrandMarquee.jsx";
-import WorldsSection from "../sections/WorldsSection.jsx";
-import ShopSection from "../sections/ShopSection.jsx";
-import WorkshopsSection from "../sections/WorkshopsSection.jsx";
-import SocialProof from "../sections/SocialProof.jsx";
-import FinalCTA from "../sections/FinalCTA.jsx";
+import SmoothScroll from "../components/home/SmoothScroll.jsx";
+import HomeNav from "../components/home/HomeNav.jsx";
+import HeroSection from "../components/home/HeroSection.jsx";
+import BentoGrid from "../components/home/BentoGrid.jsx";
+import AboutSection from "../components/home/AboutSection.jsx";
+import HorizontalGallery from "../components/home/HorizontalGallery.jsx";
+import WhatWeOffer from "../components/home/WhatWeOffer.jsx";
+import StatsBar from "../components/home/StatsBar.jsx";
+import RegistrationSection from "../components/home/RegistrationSection.jsx";
+import SiteFooter from "../components/site/SiteFooter.jsx";
 
 export default function HomePage() {
   return (
-    <StoreLayout>
-      <Hero />
-      <BrandMarquee />
-      <WorldsSection />
-      <ShopSection />
-      <WorkshopsSection />
-      <SocialProof />
-      <FinalCTA />
-    </StoreLayout>
+    <SmoothScroll>
+      <div className="min-h-full">
+        <HomeNav />
+        <main className="page-bg-root">
+          <HeroSection />
+          <BentoGrid />
+          <AboutSection />
+          <HorizontalGallery />
+          <WhatWeOffer />
+          <StatsBar />
+          <RegistrationSection />
+        </main>
+        <SiteFooter />
+      </div>
+    </SmoothScroll>
   );
 }

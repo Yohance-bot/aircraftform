@@ -94,3 +94,11 @@ section[id] {
     scroll-behavior: auto;
   }
 }
+
+/* ---- AMC editorial homepage: breathing background ---- */
+.page-bg-root {
+  --page-bg: #0a0a0a;
+  background-color: var(--page-bg);
+  transition: background-color 0.2s linear;
+}
+
