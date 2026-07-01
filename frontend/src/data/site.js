@@ -9,9 +9,9 @@ export const site = {
   city: "Bengaluru",
 
   contact: {
-    phoneDisplay: "+91 99534 03698",
-    phoneRaw: "919953403698",
-    whatsapp: "919953403698",
+    phoneDisplay: "+91 70154 10570 · 80503 12758",
+    phoneRaw: "917015410570",
+    whatsapp: "917015410570",
     whatsappMessage:
       "Hi AMC Airmodelcrafts! I'd like to know more about your products and workshops.",
     email: "hello@airmodelcrafts.com",

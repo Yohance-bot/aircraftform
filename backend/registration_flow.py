@@ -78,7 +78,7 @@ STEPS = [
     "done",
 ]
 
-CONTACT_NUMBERS = "9953517691 / 8050312758"
+CONTACT_NUMBERS = "7015410570 / 8050312758"
 
 
 def _get_price(age_group: str) -> str:

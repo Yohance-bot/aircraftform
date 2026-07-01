@@ -55,7 +55,7 @@ ESCALATION_MESSAGE = (
     "Your query has been flagged and forwarded to our team. "
     "A representative will get in touch with you shortly — "
     "usually within a few hours during working hours.\n\n"
-    "📞 For urgent matters: 9953517691 / 8050312758"
+    "📞 For urgent matters: 7015410570 / 8050312758"
 )
 
 # Message sent when the AI cannot answer a question and escalates automatically.
@@ -64,7 +64,7 @@ AI_ESCALATION_MESSAGE = (
     "able to assist with at the moment.\n\n"
     "I've flagged this conversation so a member of our team can follow up "
     "with you directly — you can expect to hear from us shortly.\n\n"
-    "📞 For immediate assistance: 9953517691 / 8050312758"
+    "📞 For immediate assistance: 7015410570 / 8050312758"
 )
 
 

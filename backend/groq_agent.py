@@ -24,11 +24,11 @@ logger = logging.getLogger("amc.groq")
 # how to reach the human team if the AI got something wrong.
 AI_DISCLAIMER = (
     "\n\n_⚠️ AI-generated response — may not always be accurate. "
-    "For confirmed info: 9953517691 / 8050312758_"
+    "For confirmed info: 7015410570 / 8050312758_"
 )
 
 FALLBACK_ANSWER = (
-    "I'm not sure about that — please contact us on 9953517691 or 8050312758 😊"
+    "I'm not sure about that — please contact us on 7015410570 or 8050312758 😊"
 )
 
 SYSTEM_PROMPT = """You are a helpful assistant for AMC Airmodelcrafts aeromodelling camps in Bangalore.
@@ -52,8 +52,8 @@ Rules:
 1. Answer only from provided knowledge base
 2. 2-3 sentences maximum — no fluff
 3. Never make up prices, dates or facts
-4. For refunds, complaints or medical needs direct to: 9953517691 / 8050312758
-5. If answer not in knowledge base, say: "I'm not sure about that — please contact us on 9953517691 or 8050312758 😊"
+4. For refunds, complaints or medical needs direct to: 7015410570 / 8050312758
+5. If answer not in knowledge base, say: "I'm not sure about that — please contact us on 7015410570 or 8050312758 😊"
 """
 
 UNREGISTERED_BLOCK = """

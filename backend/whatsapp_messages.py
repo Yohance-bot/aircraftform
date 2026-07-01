@@ -494,7 +494,7 @@ def _personalised_age(registration_context: dict) -> str:
         f"Age group: {age_group}\n"
         f"Registered for: {batch}\n\n"
         "They're in the right batch 😊\n"
-        "Questions? 📞 9953517691 / 8050312758"
+        "Questions? 📞 7015410570 / 8050312758"
     )
 
 
@@ -541,7 +541,7 @@ _GENERIC_PAYMENT_INFO = (
     "🛩 Summer Camp (Ages 10-14): Rs 11,999/-\n"
     "✈️ Summer Workshop (Ages 5-9): Rs 7,499/-\n\n"
     "Payment details are shared within 24 hours of registration.\n\n"
-    "📞 Contact us: 9953517691 / 8050312758"
+    "📞 Contact us: 7015410570 / 8050312758"
 )
 
 
@@ -570,7 +570,7 @@ async def send_payment_info(
                 f"Batch: {batch_name}\n"
                 f"Amount: {price}\n\n"
                 f"Please complete payment to confirm {child_name}'s spot.\n"
-                "📞 Contact us: 9953517691 / 8050312758"
+                "📞 Contact us: 7015410570 / 8050312758"
             )
         await send_text(phone, msg)
     else:
