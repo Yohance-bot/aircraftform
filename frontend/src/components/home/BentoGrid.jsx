@@ -3,6 +3,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Flip } from "gsap/Flip";
 
+import { useLenis } from "./SmoothScroll.jsx";
 import heroImg from "../../assets/images/home/hero.jpg";
 import certificatesImg from "../../assets/images/home/certificates.jpg";
 import workshop2Img from "../../assets/images/home/workshop-2.jpg";
@@ -13,6 +14,9 @@ export default function BentoGrid() {
   const sectionRef = useRef(null);
   const tileARef = useRef(null);
   const overlayTextRef = useRef(null);
+  const lenis = useLenis();
+  const lenisRef = useRef(lenis);
+  lenisRef.current = lenis;
 
   useEffect(() => {
     const prefersReduced = window.matchMedia(
@@ -48,6 +52,9 @@ export default function BentoGrid() {
       const tile = tileARef.current;
       const overlay = overlayTextRef.current;
       gsap.delayedCall(1.2, () => {
+        // Freeze scroll input for the duration of the forced cutscene so the
+        // fixed-position tile doesn't drift out of sync with user scrolling.
+        lenisRef.current?.stop();
         const state = Flip.getState(tile);
         gsap.set(tile, {
           position: "fixed",
@@ -74,7 +81,11 @@ export default function BentoGrid() {
                     width: "100%",
                     height: "100%",
                   });
-                  Flip.from(backState, { duration: 0.9, ease: "power2.inOut" });
+                  Flip.from(backState, {
+                    duration: 0.9,
+                    ease: "power2.inOut",
+                    onComplete: () => lenisRef.current?.start(),
+                  });
                 },
               });
             });

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-import galleryCollage from "../../assets/images/home/gallery-collage.png";
+import galleryCollage from "../../assets/images/home/gallery-collage.jpg";
 import workshop1 from "../../assets/images/home/workshop-1.jpg";
 import workshop2 from "../../assets/images/home/workshop-2.jpg";
 import kitProduct from "../../assets/images/home/kit-product.jpg";
@@ -62,9 +62,18 @@ export default function HorizontalGallery() {
   const trackRef = useRef(null);
   const imgRefs = useRef([]);
   const [scrolling, setScrolling] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
+  );
 
   useEffect(() => {
-    const isMobile = window.matchMedia("(max-width: 767px)").matches;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
     const prefersReduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -77,12 +86,15 @@ export default function HorizontalGallery() {
     const track = trackRef.current;
     gsap.set(imgRefs.current, { scale: 1.1 });
 
+    // scrub:true (not a number) keeps this 1:1 with scroll position — Lenis
+    // already supplies the eased/lagged feel on the input side, so stacking
+    // ScrollTrigger's own catch-up lag on top only adds perceptible latency.
     const st = ScrollTrigger.create({
       trigger: wrapperRef.current,
       start: "top top",
       end: () => `+=${track.scrollWidth - window.innerWidth}`,
       pin: true,
-      scrub: 1,
+      scrub: true,
       onUpdate: (self) => {
         setScrolling(self.progress > 0.005);
         gsap.set(track, {
@@ -91,25 +103,27 @@ export default function HorizontalGallery() {
       },
     });
 
-    imgRefs.current.forEach((img) => {
-      if (!img) return;
-      gsap.to(img, {
-        scale: 1,
-        ease: "none",
-        scrollTrigger: {
-          trigger: img,
-          containerAnimation: st.animation,
-          start: "left 90%",
-          end: "left 30%",
-          scrub: true,
-        },
-      });
-    });
+    const imageTweens = imgRefs.current
+      .filter(Boolean)
+      .map((img) =>
+        gsap.to(img, {
+          scale: 1,
+          ease: "none",
+          scrollTrigger: {
+            trigger: img,
+            containerAnimation: st.animation,
+            start: "left 90%",
+            end: "left 30%",
+            scrub: true,
+          },
+        }),
+      );
 
     return () => {
-      ScrollTrigger.getAll().forEach((t) => t.kill());
+      imageTweens.forEach((tw) => tw.scrollTrigger?.kill());
+      st.kill();
     };
-  }, []);
+  }, [isMobile]);
 
   return (
     <section
@@ -124,7 +138,7 @@ export default function HorizontalGallery() {
         {PANELS.map((panel, i) => (
           <div
             key={i}
-            style={{ width: window.matchMedia("(max-width: 767px)").matches ? "100vw" : panel.width }}
+            style={{ width: isMobile ? "100vw" : panel.width }}
             className="relative h-screen flex-shrink-0 overflow-hidden md:h-full"
           >
             {panel.type === "image" && (

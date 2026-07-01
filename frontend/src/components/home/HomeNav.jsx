@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { useLenis } from "./SmoothScroll.jsx";
+
 const LINKS = [
   { label: "About", href: "#about" },
   { label: "Programs", href: "#programs" },
@@ -10,6 +12,7 @@ const LINKS = [
 export default function HomeNav() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const lenis = useLenis();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 80);
@@ -22,7 +25,12 @@ export default function HomeNav() {
     e.preventDefault();
     setOpen(false);
     const el = document.querySelector(href);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!el) return;
+    if (lenis) {
+      lenis.scrollTo(el, { offset: -8, duration: 1.4 });
+    } else {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   return (

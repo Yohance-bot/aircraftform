@@ -102,3 +102,10 @@ section[id] {
   transition: background-color 0.2s linear;
 }
 
+/* Lenis drives its own easing on the /home page — native CSS smooth-scroll
+   would otherwise fight it and cause stutter. Lenis toggles this class on
+   <html> itself, so the storefront (/ and /shop, no Lenis) is unaffected. */
+html.lenis {
+  scroll-behavior: auto !important;
+}
+

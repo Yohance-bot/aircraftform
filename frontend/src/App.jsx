@@ -3,6 +3,7 @@ import { Routes, Route, Link } from "react-router-dom";
 import RegistrationForm from "./components/RegistrationForm.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import PrestigeWhiteMeadowsForm from "./components/PrestigeWhiteMeadowsForm.jsx";
+import StoreLandingPage from "./pages/StoreLandingPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import ShopPage from "./pages/ShopPage.jsx";
 
@@ -35,7 +36,8 @@ function Shell({ children, societyName = "Palm Meadows Aeromodelling Camp" }) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={<StoreLandingPage />} />
+      <Route path="/home" element={<HomePage />} />
       <Route path="/shop" element={<ShopPage />} />
       <Route
         path="/camp"

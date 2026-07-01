@@ -7,7 +7,7 @@ import WorkshopsSection from "../sections/WorkshopsSection.jsx";
 import SocialProof from "../sections/SocialProof.jsx";
 import FinalCTA from "../sections/FinalCTA.jsx";
 
-export default function HomePage() {
+export default function StoreLandingPage() {
   return (
     <StoreLayout>
       <Hero />
