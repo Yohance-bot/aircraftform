@@ -63,7 +63,7 @@ export default function SiteNav() {
             <MessageCircle className="h-5 w-5" />
           </a>
           <Link
-            to="/shop"
+            to="/#shop"
             className="hidden items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 sm:inline-flex"
           >
             <ShoppingBag className="h-4 w-4" />
@@ -95,7 +95,7 @@ export default function SiteNav() {
             ))}
             <div className="flex gap-3 px-1 pt-3">
               <Link
-                to="/shop"
+                to="/#shop"
                 onClick={() => setOpen(false)}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-bold text-white"
               >

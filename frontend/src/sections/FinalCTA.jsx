@@ -21,7 +21,7 @@ export default function FinalCTA() {
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <Link
-              to="/shop"
+              to="/#shop"
               className="group inline-flex items-center gap-2 rounded-full bg-aero-500 px-8 py-4 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-aero-400"
             >
               Start shopping

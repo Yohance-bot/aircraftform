@@ -1,11 +1,24 @@
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 
 import RegistrationForm from "./components/RegistrationForm.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import PrestigeWhiteMeadowsForm from "./components/PrestigeWhiteMeadowsForm.jsx";
 import StoreLandingPage from "./pages/StoreLandingPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
-import ShopPage from "./pages/ShopPage.jsx";
+
+// The standalone product-catalog page has been retired in favor of the
+// storefront's own inline shop section (id="shop"). Old /shop links —
+// including category deep-links like /shop?category=gliders — still resolve,
+// just onto the storefront instead of a separate page.
+function ShopRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: "/", search: location.search, hash: "shop" }}
+      replace
+    />
+  );
+}
 
 // Legacy shell for the summer-camp / admin experience. Keeps its warm cream
 // theme via `.theme-camp` so the new storefront can stay sky-white.
@@ -38,7 +51,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<StoreLandingPage />} />
       <Route path="/home" element={<HomePage />} />
-      <Route path="/shop" element={<ShopPage />} />
+      <Route path="/shop" element={<ShopRedirect />} />
       <Route
         path="/camp"
         element={

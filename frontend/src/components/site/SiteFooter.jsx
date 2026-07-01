@@ -13,13 +13,13 @@ import { categories } from "../../data/categories.js";
 
 const shopLinks = categories.map((c) => ({
   label: c.name,
-  to: `/shop?category=${c.id}`,
+  to: `/?category=${c.id}#shop`,
 }));
 
 const companyLinks = [
   { label: "Workshops & EdTech", to: "/#workshops" },
   { label: "Summer Camp", to: "/camp" },
-  { label: "All products", to: "/shop" },
+  { label: "All products", to: "/#shop" },
   { label: "Our story", to: "/#story" },
 ];
 

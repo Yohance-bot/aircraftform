@@ -138,7 +138,7 @@ export default function HeroSection() {
             Explore Our Programs
           </a>
           <a
-            href="/shop"
+            href="/"
             className="rounded-full border border-white/70 px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-white/10"
           >
             Shop Products →

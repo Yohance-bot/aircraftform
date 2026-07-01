@@ -41,7 +41,7 @@ export default function RegistrationSection() {
             fill in your details and we'll reach out within 24 hours.
           </p>
           <a
-            href="/shop"
+            href="/"
             className="mt-8 inline-flex items-center gap-2 text-sm font-bold text-black underline underline-offset-4 hover:no-underline"
           >
             Or explore our products →

@@ -63,7 +63,7 @@ export default function HomeNav() {
 
         <div className="flex items-center gap-3">
           <a
-            href="/shop"
+            href="/"
             className="hidden items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black transition-transform hover:-translate-y-0.5 sm:inline-flex"
           >
             Shop Products →
@@ -92,7 +92,7 @@ export default function HomeNav() {
             </a>
           ))}
           <a
-            href="/shop"
+            href="/"
             className="mt-2 block rounded-xl bg-white px-3 py-3 text-center text-sm font-bold text-black"
           >
             Shop Products →

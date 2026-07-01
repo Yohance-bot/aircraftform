@@ -6,24 +6,24 @@ export const heroSlides = [
     id: "drone",
     image: "/hero-drone.png",
     alt: "FPB Racing Drone — Built for this race",
-    link: "/shop?category=drones-rc",
+    link: "/?category=drones-rc#shop",
   },
   {
     id: "balsa",
     image: "/hero-balsa.png",
     alt: "Chip Monk Rubber Powered Plane — Simple, timeless, made to fly",
-    link: "/shop?category=gliders",
+    link: "/?category=gliders#shop",
   },
   {
     id: "rcplane",
     image: "/hero-rcplane.png",
     alt: "3D Park Flyer RC Plane — Built for fun, made to fly",
-    link: "/shop?category=drones-rc",
+    link: "/?category=drones-rc#shop",
   },
   {
     id: "parts",
     image: "/hero-parts.png",
     alt: "Kits & Parts — Every part you need, all in one place",
-    link: "/shop?category=parts-electronics",
+    link: "/?category=parts-electronics#shop",
   },
 ];

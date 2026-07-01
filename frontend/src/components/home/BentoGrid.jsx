@@ -1,28 +1,18 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { Flip } from "gsap/Flip";
 
-import { useLenis } from "./SmoothScroll.jsx";
 import heroImg from "../../assets/images/home/hero.jpg";
 import certificatesImg from "../../assets/images/home/certificates.jpg";
 import workshop2Img from "../../assets/images/home/workshop-2.jpg";
 
-gsap.registerPlugin(ScrollTrigger, Flip);
+gsap.registerPlugin(ScrollTrigger);
 
 export default function BentoGrid() {
   const sectionRef = useRef(null);
-  const tileARef = useRef(null);
-  const overlayTextRef = useRef(null);
-  const lenis = useLenis();
-  const lenisRef = useRef(lenis);
-  lenisRef.current = lenis;
+  const tileRefs = useRef([]);
 
   useEffect(() => {
-    const prefersReduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-
     const bgTween = gsap.to("main", {
       "--page-bg": "#0f1923",
       scrollTrigger: {
@@ -33,69 +23,30 @@ export default function BentoGrid() {
       },
     });
 
+    const prefersReduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
     if (prefersReduced) {
+      gsap.set(tileRefs.current, { opacity: 1, y: 0 });
       return () => bgTween.scrollTrigger?.kill();
     }
 
-    let played = false;
-    const st = ScrollTrigger.create({
-      trigger: sectionRef.current,
-      start: "top center",
-      onEnter: () => {
-        if (played) return;
-        played = true;
-        runZoom();
+    gsap.set(tileRefs.current, { opacity: 0, y: 40 });
+    const fadeIn = gsap.to(tileRefs.current, {
+      opacity: 1,
+      y: 0,
+      duration: 0.8,
+      stagger: 0.15,
+      ease: "power2.out",
+      scrollTrigger: {
+        trigger: sectionRef.current,
+        start: "top 75%",
       },
     });
 
-    function runZoom() {
-      const tile = tileARef.current;
-      const overlay = overlayTextRef.current;
-      gsap.delayedCall(1.2, () => {
-        // Freeze scroll input for the duration of the forced cutscene so the
-        // fixed-position tile doesn't drift out of sync with user scrolling.
-        lenisRef.current?.stop();
-        const state = Flip.getState(tile);
-        gsap.set(tile, {
-          position: "fixed",
-          inset: 0,
-          zIndex: 70,
-          width: "100vw",
-          height: "100vh",
-        });
-        Flip.from(state, {
-          duration: 0.9,
-          ease: "power2.inOut",
-          onComplete: () => {
-            gsap.to(overlay, { opacity: 1, duration: 0.5 });
-            gsap.delayedCall(1.8, () => {
-              gsap.to(overlay, {
-                opacity: 0,
-                duration: 0.4,
-                onComplete: () => {
-                  const backState = Flip.getState(tile);
-                  gsap.set(tile, {
-                    position: "static",
-                    inset: "auto",
-                    zIndex: "auto",
-                    width: "100%",
-                    height: "100%",
-                  });
-                  Flip.from(backState, {
-                    duration: 0.9,
-                    ease: "power2.inOut",
-                    onComplete: () => lenisRef.current?.start(),
-                  });
-                },
-              });
-            });
-          },
-        });
-      });
-    }
-
     return () => {
-      st.kill();
+      fadeIn.scrollTrigger?.kill();
       bgTween.scrollTrigger?.kill();
     };
   }, []);
@@ -107,7 +58,7 @@ export default function BentoGrid() {
       className="relative grid h-[90vh] w-full grid-cols-3 grid-rows-2 gap-1 bg-black p-1"
     >
       <div
-        ref={tileARef}
+        ref={(el) => (tileRefs.current[0] = el)}
         className="group relative col-span-2 row-span-2 overflow-hidden"
       >
         <img
@@ -119,15 +70,9 @@ export default function BentoGrid() {
       </div>
 
       <div
-        ref={overlayTextRef}
-        className="pointer-events-none fixed inset-0 z-[71] flex items-center justify-center opacity-0"
+        ref={(el) => (tileRefs.current[1] = el)}
+        className="group relative col-span-1 row-span-1 overflow-hidden"
       >
-        <span className="text-[clamp(2rem,6vw,4.5rem)] font-extrabold text-white drop-shadow-lg">
-          12+ years of flight
-        </span>
-      </div>
-
-      <div className="group relative col-span-1 row-span-1 overflow-hidden">
         <img
           src={certificatesImg}
           alt="Ryan International certificates"
@@ -136,7 +81,10 @@ export default function BentoGrid() {
         />
       </div>
 
-      <div className="group relative col-span-1 row-span-1 overflow-hidden">
+      <div
+        ref={(el) => (tileRefs.current[2] = el)}
+        className="group relative col-span-1 row-span-1 overflow-hidden"
+      >
         <img
           src={workshop2Img}
           alt="Cambridge School outdoor group workshop"

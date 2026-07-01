@@ -62,7 +62,7 @@ function WorldBlock({ category, index }) {
               {category.blurb}
             </p>
             <Link
-              to={`/shop?category=${category.id}`}
+              to={`/?category=${category.id}#shop`}
               className="group mt-7 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-white transition-transform hover:-translate-y-0.5"
             >
               Shop {category.name}

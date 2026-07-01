@@ -35,10 +35,11 @@ export function whatsappLink(message = site.contact.whatsappMessage) {
   return `https://wa.me/${site.contact.whatsapp}?text=${encodeURIComponent(message)}`;
 }
 
-// Top navigation for the storefront. Hash links scroll within the home page;
-// path links route elsewhere (shop, summer-camp registration, etc.).
+// Top navigation for the storefront. Hash links scroll within the storefront
+// page; path links route elsewhere (the editorial home page, summer-camp
+// registration, etc.).
 export const navLinks = [
-  { label: "Shop", to: "/shop" },
+  { label: "Home", to: "/home" },
   { label: "Drones & RC", to: "/#flagship" },
   { label: "Build Your Own", to: "/#build" },
   { label: "Workshops", to: "/#workshops" },
