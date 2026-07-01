@@ -5,6 +5,7 @@ import BentoGrid from "../components/home/BentoGrid.jsx";
 import AboutSection from "../components/home/AboutSection.jsx";
 import HorizontalGallery from "../components/home/HorizontalGallery.jsx";
 import WhatWeOffer from "../components/home/WhatWeOffer.jsx";
+import EventsCalendar from "../components/home/EventsCalendar.jsx";
 import StatsBar from "../components/home/StatsBar.jsx";
 import RegistrationSection from "../components/home/RegistrationSection.jsx";
 import SiteFooter from "../components/site/SiteFooter.jsx";
@@ -20,6 +21,7 @@ export default function HomePage() {
           <AboutSection />
           <HorizontalGallery />
           <WhatWeOffer />
+          <EventsCalendar />
           <StatsBar />
           <RegistrationSection />
         </main>
