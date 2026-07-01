@@ -46,7 +46,7 @@ export default function HeroSection() {
       return undefined;
     }
 
-    const split = new SplitType(headingRef.current, { types: "chars" });
+    const split = new SplitType(headingRef.current, { types: "words, chars" });
 
     gsap.set(split.chars, { opacity: 0, y: 60, rotateX: -40 });
     gsap.set([labelRef.current, subRef.current, ctaRef.current], {
@@ -122,7 +122,7 @@ export default function HeroSection() {
         </p>
         <h1
           ref={headingRef}
-          className="mt-4 max-w-[700px] text-[clamp(2.2rem,6vw,4.5rem)] font-extrabold leading-[1.1] text-white"
+          className="hero-heading mt-4 max-w-[700px] text-[clamp(2.2rem,6vw,4.5rem)] font-extrabold leading-[1.1] text-white"
         >
           Where India learns to build, fly and never look down.
         </h1>

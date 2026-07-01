@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, ShoppingBag, MessageCircle } from "lucide-react";
+import { Menu, X, Home, MessageCircle } from "lucide-react";
 
 import Logo from "./Logo.jsx";
 import { navLinks, site, whatsappLink } from "../../data/site.js";
@@ -63,11 +63,11 @@ export default function SiteNav() {
             <MessageCircle className="h-5 w-5" />
           </a>
           <Link
-            to="/#shop"
+            to="/home"
             className="hidden items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 sm:inline-flex"
           >
-            <ShoppingBag className="h-4 w-4" />
-            Shop
+            <Home className="h-4 w-4" />
+            Home
           </Link>
           <button
             type="button"
@@ -95,12 +95,12 @@ export default function SiteNav() {
             ))}
             <div className="flex gap-3 px-1 pt-3">
               <Link
-                to="/#shop"
+                to="/home"
                 onClick={() => setOpen(false)}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-bold text-white"
               >
-                <ShoppingBag className="h-4 w-4" />
-                Shop all
+                <Home className="h-4 w-4" />
+                Home
               </Link>
               <a
                 href={whatsappLink()}

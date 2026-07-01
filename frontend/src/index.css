@@ -109,3 +109,9 @@ html.lenis {
   scroll-behavior: auto !important;
 }
 
+/* Keep SplitType word units intact so "never" etc. don't break mid-word */
+.hero-heading .word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
