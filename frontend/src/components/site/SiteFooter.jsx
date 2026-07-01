@@ -20,7 +20,6 @@ const companyLinks = [
   { label: "Workshops & EdTech", to: "/#workshops" },
   { label: "Summer Camp", to: "/camp" },
   { label: "All products", to: "/#shop" },
-  { label: "Our story", to: "/#story" },
 ];
 
 export default function SiteFooter() {
