@@ -214,7 +214,16 @@ export async function sendManualMessage(adminKey, phone, message) {
     throw new Error("Invalid admin key.");
   }
   if (!res.ok) {
-    throw new Error("Failed to send message.");
+    let detail = "Failed to send message.";
+    try {
+      const data = await res.json();
+      if (data?.detail) {
+        detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(detail);
   }
   return res.json();
 }

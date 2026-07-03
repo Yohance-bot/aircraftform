@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { User } from "lucide-react";
 
 import {
   fetchConversations,
@@ -125,6 +126,27 @@ function previewMessage(body, conversation) {
   return body;
 }
 
+const AVATAR_COLORS = [
+  "#e17076",
+  "#7bc862",
+  "#65b8c5",
+  "#e5a847",
+  "#6748c7",
+  "#ee7aae",
+  "#5b9bd5",
+  "#009688",
+  "#6b7c85",
+  "#c9605e",
+];
+
+function avatarColor(seed) {
+  const s = seed || "?";
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    hash = s.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
 function formatWhatsAppText(text) {
   if (!text) return null;
   const parts = text.split(/(\*[^*]+\*)/g);
@@ -141,13 +163,13 @@ function formatWhatsAppText(text) {
 }
 
 function Avatar({ name, phone, size = 40 }) {
-  const label = (name || phone || "?").charAt(0).toUpperCase();
+  const color = avatarColor(phone || name);
   return (
     <div
-      className="rounded-full bg-[#dfe5e7] text-[#54656f] flex items-center justify-center font-medium flex-shrink-0"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
+      className="rounded-full flex items-center justify-center flex-shrink-0 text-white"
+      style={{ width: size, height: size, backgroundColor: color }}
     >
-      {label}
+      <User size={Math.round(size * 0.48)} strokeWidth={2.25} />
     </div>
   );
 }
@@ -163,6 +185,7 @@ export default function ConversationsPanel({ adminKey }) {
   const [sending, setSending] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [sendError, setSendError] = useState("");
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -225,6 +248,7 @@ export default function ConversationsPanel({ adminKey }) {
 
     const msgText = newMessage.trim();
     setSending(true);
+    setSendError("");
 
     const optimisticMsg = {
       id: Date.now(),
@@ -240,10 +264,12 @@ export default function ConversationsPanel({ adminKey }) {
     try {
       await sendManualMessage(adminKey, selectedPhone, msgText);
       loadSelectedConversation();
+      loadConversations();
     } catch (err) {
       console.error("Failed to send message:", err);
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
       setNewMessage(msgText);
+      setSendError(err.message || "Failed to send message.");
     } finally {
       setSending(false);
     }
@@ -361,7 +387,7 @@ export default function ConversationsPanel({ adminKey }) {
 
             <div
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto px-[8%] py-3"
+              className="flex-1 overflow-y-auto px-4 sm:px-12 md:px-20 py-4 space-y-2"
               style={{
                 backgroundColor: "#efeae2",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.35'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
@@ -396,8 +422,14 @@ export default function ConversationsPanel({ adminKey }) {
 
             <form
               onSubmit={handleSendMessage}
-              className="px-4 py-3 bg-[#f0f2f5] flex gap-3 items-center"
+              className="px-4 py-3 bg-[#f0f2f5] flex flex-col gap-2"
             >
+              {sendError && (
+                <div className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {sendError}
+                </div>
+              )}
+              <div className="flex gap-3 items-center">
               <input
                 type="text"
                 placeholder="Type a message"
@@ -413,6 +445,7 @@ export default function ConversationsPanel({ adminKey }) {
               >
                 {sending ? "..." : "Send"}
               </button>
+              </div>
             </form>
           </>
         ) : null}
@@ -558,8 +591,10 @@ function InteractiveMenuCard({ menu, isOutgoing, timestamp }) {
           ))}
         </div>
       ))}
-      <div className="px-3 pb-1.5 flex justify-end">
-        <span className="text-[11px] text-[#667781]">{formatMessageTime(timestamp)}</span>
+      <div className="px-3 pb-2 pt-1 flex justify-end">
+        <span className="text-[11px] text-[#667781] leading-none">
+          {formatMessageTime(timestamp)}
+        </span>
       </div>
     </div>
   );
@@ -567,7 +602,6 @@ function InteractiveMenuCard({ menu, isOutgoing, timestamp }) {
 
 function MessageBubble({ message, conversation }) {
   const isIncoming = message.direction === "in";
-  const isBot = message.sender === "bot";
   const isAdmin = message.sender === "admin";
 
   let displayBody = message.body;
@@ -576,6 +610,7 @@ function MessageBubble({ message, conversation }) {
   }
 
   const menu = parseMenuMessage(displayBody, conversation);
+  const time = formatMessageTime(message.timestamp);
 
   const bubbleBg = isIncoming
     ? "bg-white"
@@ -587,7 +622,7 @@ function MessageBubble({ message, conversation }) {
 
   if (menu) {
     return (
-      <div className={`flex ${alignClass} mb-1 px-1`}>
+      <div className={`flex ${alignClass} mb-2`}>
         <InteractiveMenuCard
           menu={menu}
           isOutgoing={!isIncoming}
@@ -598,24 +633,27 @@ function MessageBubble({ message, conversation }) {
   }
 
   return (
-    <div className={`flex ${alignClass} mb-1 px-1`}>
+    <div className={`flex ${alignClass} mb-2`}>
       <div
-        className={`relative max-w-[65%] min-w-[80px] px-2 py-1.5 rounded-lg shadow-sm ${bubbleBg}`}
+        className={`max-w-[65%] min-w-[72px] rounded-lg shadow-sm ${bubbleBg}`}
         style={{
-          borderTopLeftRadius: isIncoming ? "0" : undefined,
-          borderTopRightRadius: !isIncoming ? "0" : undefined,
+          borderTopLeftRadius: isIncoming ? "0" : "7.5px",
+          borderTopRightRadius: !isIncoming ? "0" : "7.5px",
+          borderRadius: "7.5px",
         }}
       >
-        {isAdmin && (
-          <div className="text-[10px] text-[#008069] font-medium mb-0.5">You (admin)</div>
-        )}
-        <div className="text-[14.2px] text-[#111b21] leading-[19px] whitespace-pre-wrap break-words pr-12">
-          {formatWhatsAppText(displayBody)}
-        </div>
-        <div className="absolute bottom-1 right-2 flex items-center gap-1">
-          <span className="text-[11px] text-[#667781]">
-            {formatMessageTime(message.timestamp)}
-          </span>
+        <div className="px-2.5 pt-1.5 pb-1">
+          {isAdmin && (
+            <div className="text-[10px] text-[#008069] font-medium mb-0.5">You (admin)</div>
+          )}
+          <div className="flex flex-wrap items-end gap-x-2 gap-y-0">
+            <span className="text-[14.2px] text-[#111b21] leading-[19px] whitespace-pre-wrap break-words flex-1 min-w-[calc(100%-56px)]">
+              {formatWhatsAppText(displayBody)}
+            </span>
+            <span className="text-[11px] text-[#667781] leading-none whitespace-nowrap select-none shrink-0 ml-auto">
+              {time}
+            </span>
+          </div>
         </div>
       </div>
     </div>

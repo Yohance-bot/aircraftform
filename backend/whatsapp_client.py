@@ -48,10 +48,16 @@ async def send_whatsapp(payload: dict) -> dict | None:
     Returns the Meta response JSON on success, ``{"captured": True}``
     when running under a capture context, and ``None`` on any error.
     """
+    result, _error = await send_whatsapp_result(payload)
+    return result
+
+
+async def send_whatsapp_result(payload: dict) -> tuple[dict | None, str | None]:
+    """Like :func:`send_whatsapp` but also returns a human-readable error."""
     capture = whatsapp_capture.get()
     if capture is not None:
         capture.append(payload)
-        return {"captured": True}
+        return {"captured": True}, None
 
     from whatsapp_credentials import resolve_whatsapp_credentials
 
@@ -59,10 +65,10 @@ async def send_whatsapp(payload: dict) -> dict | None:
     _, access_token = resolve_whatsapp_credentials()
     access_token = (access_token or "").strip()
     if not url or not access_token:
-        logger.warning(
-            "send_whatsapp skipped: no active WhatsApp account or env credentials"
+        return None, (
+            "WhatsApp is not configured. Add credentials in Settings or set "
+            "WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN."
         )
-        return None
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -73,17 +79,26 @@ async def send_whatsapp(payload: dict) -> dict | None:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(url, headers=headers, json=payload)
         if response.status_code >= 400:
+            detail = response.text[:500]
             logger.error(
                 "Meta API error %s for payload type=%s: %s",
                 response.status_code,
                 payload.get("type"),
-                response.text[:500],
+                detail,
             )
-            return None
+            try:
+                err_json = response.json()
+                err_msg = (
+                    err_json.get("error", {}).get("message")
+                    or err_json.get("error", {}).get("error_user_msg")
+                )
+            except ValueError:
+                err_msg = None
+            return None, err_msg or f"WhatsApp API error ({response.status_code})"
         try:
-            return response.json()
+            return response.json(), None
         except ValueError:
-            return None
+            return None, "Invalid response from WhatsApp API"
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("send_whatsapp transport failure: %s", exc)
-        return None
+        return None, str(exc)

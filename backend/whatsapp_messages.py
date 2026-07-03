@@ -243,6 +243,21 @@ async def send_text(phone: str, message: str) -> None:
     await send_whatsapp(payload)
 
 
+async def send_text_result(phone: str, message: str) -> tuple[bool, str | None]:
+    """Send plain text and report whether Meta accepted the message."""
+    normalized = _to_meta_phone(phone) or phone
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": normalized,
+        "type": "text",
+        "text": {"body": message, "preview_url": False},
+    }
+    from whatsapp_client import send_whatsapp_result
+
+    resp, err = await send_whatsapp_result(payload)
+    return resp is not None, err
+
+
 async def send_text_tracked(phone: str, message: str) -> str | None:
     """Like :func:`send_text` but returns the WhatsApp message id (wamid).
 

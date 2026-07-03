@@ -20,7 +20,7 @@ from conversation_models import AdminUser, Conversation, Message
 from crm_service import log_timeline
 from database import get_db
 from marketing_service import build_tracked_body, create_campaign, personalise, record_send
-from whatsapp_messages import send_text, send_text_tracked
+from whatsapp_messages import send_text, send_text_result, send_text_tracked
 
 logger = logging.getLogger("amc.conversations")
 
@@ -251,7 +251,13 @@ async def send_message_to_conversation(
                 detail="Conversation not found.",
             )
 
-        await send_text(phone, payload.message)
+        ok, wa_error = await send_text_result(phone, payload.message)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=wa_error
+                or "WhatsApp could not deliver the message. Check credentials and the 24-hour reply window.",
+            )
 
         msg = Message(
             phone=phone,
@@ -262,6 +268,8 @@ async def send_message_to_conversation(
         db.add(msg)
 
         conv.updated_at = datetime.utcnow()
+        if not conv.bot_paused:
+            conv.bot_paused = True
         log_timeline(db, phone, "message_sent", "Agent sent a message",
                      actor="admin", commit=False)
         db.commit()
