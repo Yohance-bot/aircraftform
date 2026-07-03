@@ -632,7 +632,7 @@ export default function AdminDashboard() {
                 activeConversationCount={activeConversationCount}
               />
             ) : activeTab === "conversations" ? (
-              <div style={{ flex: 1, minHeight: 0 }}>
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
                 <ConversationsPanel adminKey={adminKey} />
               </div>
             ) : activeTab === "broadcast" ? (

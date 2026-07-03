@@ -13,6 +13,7 @@ still get a friendly response.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -195,6 +196,23 @@ def _build_menu_interactive(registration_context: dict | None) -> dict:
         "footer": {"text": "💬 Or just type your question below!"},
         "action": {"button": "View Options", "sections": _MENU_SECTIONS},
     }
+
+
+MENU_STORAGE_MARKER = "__WA_INTERACTIVE_MENU__:"
+
+
+def serialize_menu_for_storage(registration_context: dict | None) -> str:
+    """Serialize the interactive list menu for admin conversation history."""
+    interactive = _build_menu_interactive(registration_context)
+    payload = {
+        "type": "list",
+        "header": interactive["header"]["text"],
+        "body": interactive["body"]["text"],
+        "footer": interactive.get("footer", {}).get("text", ""),
+        "button": interactive["action"]["button"],
+        "sections": interactive["action"]["sections"],
+    }
+    return MENU_STORAGE_MARKER + json.dumps(payload, ensure_ascii=False)
 
 
 async def send_interactive_menu(

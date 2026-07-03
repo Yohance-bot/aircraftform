@@ -44,6 +44,7 @@ from whatsapp_messages import (
     send_payment_info,
     send_speak_to_us,
     send_text,
+    serialize_menu_for_storage,
 )
 
 
@@ -215,7 +216,7 @@ def _extract_message_body(message: dict) -> str:
             if interactive_type == "button_reply":
                 button = (interactive.get("button_reply") or {}).get("id", "unknown")
                 labels = {
-                    "back_to_menu": "🏠 Returned to main menu",
+                    "back_to_menu": "🏠 Main Menu",
                 }
                 return labels.get(button, f"[button: {button}]")
 
@@ -380,7 +381,9 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
 
             if normalized in GREETINGS:
                 await send_interactive_menu(phone, registration_context)
-                _save_bot_message(phone, "[Sent main menu]", db)
+                _save_bot_message(
+                    phone, serialize_menu_for_storage(registration_context), db
+                )
                 return
 
             answer = await groq_rag_answer(
@@ -432,24 +435,32 @@ async def _dispatch_message(message: dict, phone: str, db: Session) -> None:
 
                 logger.warning("Unhandled list_reply id=%r", selection_id)
                 await send_interactive_menu(phone, registration_context)
-                _save_bot_message(phone, "[Sent main menu]", db)
+                _save_bot_message(
+                    phone, serialize_menu_for_storage(registration_context), db
+                )
                 return
 
             if interactive_type == "button_reply":
                 button_id = (interactive.get("button_reply") or {}).get("id", "")
                 if button_id == "back_to_menu":
                     await send_interactive_menu(phone, registration_context)
-                    _save_bot_message(phone, "[Sent main menu]", db)
+                    _save_bot_message(
+                        phone, serialize_menu_for_storage(registration_context), db
+                    )
                     return
                 logger.warning("Unhandled button_reply id=%r", button_id)
                 await send_interactive_menu(phone, registration_context)
-                _save_bot_message(phone, "[Sent main menu]", db)
+                _save_bot_message(
+                    phone, serialize_menu_for_storage(registration_context), db
+                )
                 return
 
         # Anything else (image, audio, location, etc.) — show the menu so the
         # parent has a clear way forward.
         await send_interactive_menu(phone, registration_context)
-        _save_bot_message(phone, "[Sent main menu]", db)
+        _save_bot_message(
+            phone, serialize_menu_for_storage(registration_context), db
+        )
 
     except Exception as exc:
         logger.exception("Dispatch error for phone=%s: %s", phone, exc)
