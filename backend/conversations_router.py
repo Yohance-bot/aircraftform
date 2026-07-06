@@ -84,6 +84,11 @@ class SendMessageRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4096)
 
 
+class SendMessageResponse(BaseModel):
+    success: bool
+    whatsapp_message_id: str | None = None
+
+
 class UpdateBucketRequest(BaseModel):
     bucket: str = Field(..., min_length=1, max_length=50)
 
@@ -239,13 +244,14 @@ def get_conversation(phone: str, db: Session = Depends(get_db)) -> dict[str, Any
 
 @router.post(
     "/api/conversations/{phone}/send",
+    response_model=SendMessageResponse,
     dependencies=[Depends(require_admin)],
 )
 async def send_message_to_conversation(
     phone: str,
     payload: SendMessageRequest,
     db: Session = Depends(get_db),
-) -> dict[str, bool]:
+) -> SendMessageResponse:
     """Send a message to a conversation and save it."""
     try:
         conv = db.query(Conversation).filter(Conversation.phone == phone).first()
@@ -266,6 +272,25 @@ async def send_message_to_conversation(
                     "WhatsApp to see messages sent to your customer number."
                 ),
             )
+
+        last_inbound = (
+            db.query(Message)
+            .filter(Message.phone == phone, Message.direction == "in")
+            .order_by(Message.timestamp.desc())
+            .first()
+        )
+        if last_inbound:
+            hours_since = (datetime.utcnow() - last_inbound.timestamp).total_seconds() / 3600
+            if hours_since > 24:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "More than 24 hours have passed since this customer last "
+                        "messaged you. WhatsApp only allows free-form replies within "
+                        "24 hours — use a Targeted Send or Broadcast with an approved "
+                        "template instead."
+                    ),
+                )
 
         ok, wa_error, wamid = await send_text_result(phone, payload.message)
         if not ok:
@@ -292,7 +317,7 @@ async def send_message_to_conversation(
                      actor="admin", commit=False)
         db.commit()
 
-        return {"success": True, "whatsapp_message_id": wamid}
+        return SendMessageResponse(success=True, whatsapp_message_id=wamid)
     except HTTPException:
         raise
     except Exception as exc:

@@ -17,7 +17,7 @@ def handle_conversation_delivery_statuses(db: Session, statuses: list[dict]) -> 
     for st in statuses or []:
         wamid = st.get("id")
         status = (st.get("status") or "").lower()
-        recipient = st.get("recipient")
+        recipient = st.get("recipient_id") or st.get("recipient")
 
         if status == "failed":
             logger.error(
