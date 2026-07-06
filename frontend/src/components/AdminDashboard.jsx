@@ -123,6 +123,33 @@ const SIDEBAR_STYLES = `
     width: 180px;
     min-width: 180px;
   }
+  .amc-sidebar .amc-nav-item-text,
+  .amc-sidebar .amc-nav-section {
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    transition: opacity 0.2s, max-width 0.2s;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .amc-sidebar:hover .amc-nav-item-text,
+  .amc-sidebar:hover .amc-nav-section {
+    opacity: 1;
+    max-width: 160px;
+  }
+  .amc-sidebar .amc-nav-section {
+    display: block;
+    padding: 10px 14px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(245, 158, 11, 0.55);
+  }
+  .amc-sidebar .amc-nav-item-text {
+    font-size: 14px;
+    font-weight: 600;
+  }
   .amc-sidebar .amc-nav-label {
     opacity: 0;
     max-width: 0;
@@ -239,13 +266,39 @@ const SIDEBAR_STYLES = `
   .amc-mobile-drawer.open {
     transform: translateX(0);
   }
-  .amc-mobile-drawer .amc-nav-label {
-    opacity: 1;
-    max-width: 200px;
+  .amc-mobile-drawer .amc-nav-section {
+    padding: 10px 14px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(245, 158, 11, 0.85);
   }
   .amc-mobile-drawer .amc-nav-item {
     justify-content: flex-start;
     padding-left: 14px;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .amc-mobile-drawer .amc-nav-item svg {
+    color: rgba(255, 255, 255, 0.9);
+    flex-shrink: 0;
+  }
+  .amc-mobile-drawer .amc-nav-item-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.92);
+    opacity: 1;
+    max-width: none;
+    overflow: visible;
+    white-space: nowrap;
+  }
+  .amc-mobile-drawer .amc-nav-item.active {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+  }
+  .amc-mobile-drawer .amc-nav-item.active .amc-nav-item-text,
+  .amc-mobile-drawer .amc-nav-item.active svg {
+    color: #fbbf24;
   }
   .amc-mobile-drawer-header {
     display: flex;
@@ -256,6 +309,24 @@ const SIDEBAR_STYLES = `
   }
 
   @media (max-width: 767px) {
+    body.amc-dashboard-active {
+      overflow-x: hidden;
+      max-width: 100%;
+    }
+    .amc-app-shell {
+      overflow-x: hidden !important;
+      max-width: 100vw;
+      width: 100%;
+    }
+    .amc-main-content {
+      overflow-x: hidden;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .amc-dashboard-root {
+      overflow-x: hidden !important;
+      max-width: 100%;
+    }
     .amc-sidebar {
       display: none !important;
     }
@@ -310,6 +381,10 @@ const SIDEBAR_STYLES = `
     .amc-dashboard-root:not(.amc-dashboard-root--flush) {
       padding: 10px 12px !important;
     }
+    .amc-sky-header {
+      max-width: 100%;
+      overflow: hidden;
+    }
     .amc-reg-card-inner {
       flex-direction: column !important;
       align-items: flex-start !important;
@@ -345,6 +420,20 @@ export default function AdminDashboard() {
   });
   const [activeConversationCount, setActiveConversationCount] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    if (!authed) return undefined;
+    document.body.classList.add("amc-dashboard-active");
+    return () => document.body.classList.remove("amc-dashboard-active");
+  }, [authed]);
+
+  useEffect(() => {
+    if (!authed) return undefined;
+    document.body.style.overflow = mobileNavOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileNavOpen, authed]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -526,7 +615,7 @@ export default function AdminDashboard() {
       <>
         {NAV_ITEMS.map((item, idx) => (
           item.section ? (
-            <div key={`sec-${idx}`} className="amc-nav-label" style={{ padding: "10px 14px 4px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(245,158,11,0.55)" }}>
+            <div key={`sec-${idx}`} className="amc-nav-section">
               {item.section}
             </div>
           ) : (
@@ -536,7 +625,7 @@ export default function AdminDashboard() {
               onClick={() => onSelect(item.id)}
             >
               <item.Icon size={18} style={{ width: "22px", textAlign: "center" }} />
-              <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>{item.label}</span>
+              <span className="amc-nav-item-text">{item.label}</span>
             </div>
           )
         ))}
@@ -546,14 +635,14 @@ export default function AdminDashboard() {
             onClick={() => onSelect("crm_settings")}
           >
             <SlidersHorizontal size={18} style={{ width: "22px", textAlign: "center" }} />
-            <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>CRM Settings</span>
+            <span className="amc-nav-item-text">CRM Settings</span>
           </div>
           <div
             className={`amc-nav-item ${activeTab === "settings" ? "active" : ""}`}
             onClick={() => onSelect("settings")}
           >
             <Smartphone size={18} style={{ width: "22px", textAlign: "center" }} />
-            <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>WhatsApp</span>
+            <span className="amc-nav-item-text">WhatsApp</span>
           </div>
         </div>
       </>
@@ -563,7 +652,7 @@ export default function AdminDashboard() {
   return (
     <>
       <style>{SIDEBAR_STYLES}</style>
-      <div style={{
+      <div className="amc-app-shell" style={{
         position: "fixed",
         inset: 0,
         display: "flex",
@@ -653,7 +742,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Main Content */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        <div className="amc-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
           <div className="amc-mobile-topbar">
             <button
               type="button"

@@ -339,7 +339,7 @@ export default function ConversationsPanel({ adminKey }) {
   });
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-white">
+    <div className="flex h-full w-full overflow-hidden overflow-x-hidden bg-white max-w-full">
       {/* Left Panel — Chat list (WhatsApp sidebar) */}
       <div
         className={`${
