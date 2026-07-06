@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Shield, Settings, CheckCircle, Download, Gauge, Contact, Bell, TrendingUp, Megaphone, FileText, ClipboardCheck, SlidersHorizontal, Smartphone, GitBranch, BarChart3, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Radio, BookOpen, Shield, Settings, CheckCircle, Download, Gauge, Contact, Bell, TrendingUp, Megaphone, FileText, ClipboardCheck, SlidersHorizontal, Smartphone, GitBranch, BarChart3, Sparkles, Menu, X } from 'lucide-react';
 
 import { fetchConversations, fetchRegistrations } from "../api.js";
 import AdminsPanel from "./AdminsPanel.jsx";
@@ -190,6 +190,147 @@ const SIDEBAR_STYLES = `
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
+
+  .amc-mobile-topbar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: #0d2247;
+    color: #fff;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    z-index: 30;
+  }
+  .amc-mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    cursor: pointer;
+  }
+  .amc-mobile-drawer-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 40;
+  }
+  .amc-mobile-drawer {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 85vw);
+    z-index: 50;
+    background: linear-gradient(180deg, #1a3a6b 0%, #0d2247 50%, #071530 100%);
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    overflow: hidden;
+  }
+  .amc-mobile-drawer.open {
+    transform: translateX(0);
+  }
+  .amc-mobile-drawer .amc-nav-label {
+    opacity: 1;
+    max-width: 200px;
+  }
+  .amc-mobile-drawer .amc-nav-item {
+    justify-content: flex-start;
+    padding-left: 14px;
+  }
+  .amc-mobile-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  @media (max-width: 767px) {
+    .amc-sidebar {
+      display: none !important;
+    }
+    .amc-mobile-topbar {
+      display: flex;
+    }
+    .amc-mobile-drawer-backdrop {
+      display: block;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .amc-mobile-drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .amc-mobile-drawer {
+      display: flex;
+    }
+    .amc-sky-header {
+      height: 110px !important;
+    }
+    .amc-sky-header .amc-sky-decor,
+    .amc-sky-header .amc-sky-plane-big,
+    .amc-sky-header .amc-sky-live-badge {
+      display: none !important;
+    }
+    .amc-sky-header .amc-sky-title {
+      font-size: 20px !important;
+    }
+    .amc-sky-header .amc-sky-subtitle {
+      font-size: 12px !important;
+    }
+    .amc-stats-row {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px !important;
+      padding: 12px !important;
+    }
+    .amc-stat-card-value {
+      font-size: 22px !important;
+    }
+    .amc-stat-card-label {
+      font-size: 10px !important;
+    }
+    .amc-dashboard-home {
+      flex-direction: column !important;
+    }
+    .amc-dashboard-sidebar {
+      width: 100% !important;
+    }
+    .amc-dashboard-root:not(.amc-dashboard-root--flush) {
+      padding: 10px 12px !important;
+    }
+    .amc-reg-card-inner {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 12px !important;
+    }
+    .amc-reg-card-status {
+      text-align: left !important;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .amc-view-all-row {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 10px !important;
+    }
+    .amc-view-all-row button {
+      width: 100%;
+    }
+  }
 `;
 
 export default function AdminDashboard() {
@@ -203,6 +344,7 @@ export default function AdminDashboard() {
     return params.get("wa_resume") === "1" ? "settings" : "dashboard";
   });
   const [activeConversationCount, setActiveConversationCount] = useState(0);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -301,7 +443,7 @@ export default function AdminDashboard() {
           boxShadow: "0 25px 50px -12px rgba(0,0,0,0.15)",
           maxWidth: "384px",
           width: "100%",
-          padding: "32px"
+          padding: "24px",
         }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
             <PaperPlane size={48} color="#f59e0b" />
@@ -370,6 +512,54 @@ export default function AdminDashboard() {
   const isFullHeightTab = FULL_HEIGHT_TABS.has(activeTab);
   const showSkyHeader = activeTab === "dashboard";
 
+  const activeNavItem = NAV_ITEMS.find((item) => item.id === activeTab);
+  const activeTabLabel = activeNavItem?.label
+    || (activeTab === "crm_settings" ? "CRM Settings" : activeTab === "settings" ? "WhatsApp" : "Control Tower");
+
+  function selectTab(tabId) {
+    setActiveTab(tabId);
+    setMobileNavOpen(false);
+  }
+
+  function renderNavItems(onSelect) {
+    return (
+      <>
+        {NAV_ITEMS.map((item, idx) => (
+          item.section ? (
+            <div key={`sec-${idx}`} className="amc-nav-label" style={{ padding: "10px 14px 4px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(245,158,11,0.55)" }}>
+              {item.section}
+            </div>
+          ) : (
+            <div
+              key={item.id}
+              className={`amc-nav-item ${activeTab === item.id ? "active" : ""}`}
+              onClick={() => onSelect(item.id)}
+            >
+              <item.Icon size={18} style={{ width: "22px", textAlign: "center" }} />
+              <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>{item.label}</span>
+            </div>
+          )
+        ))}
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "8px", paddingTop: "8px" }}>
+          <div
+            className={`amc-nav-item ${activeTab === "crm_settings" ? "active" : ""}`}
+            onClick={() => onSelect("crm_settings")}
+          >
+            <SlidersHorizontal size={18} style={{ width: "22px", textAlign: "center" }} />
+            <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>CRM Settings</span>
+          </div>
+          <div
+            className={`amc-nav-item ${activeTab === "settings" ? "active" : ""}`}
+            onClick={() => onSelect("settings")}
+          >
+            <Smartphone size={18} style={{ width: "22px", textAlign: "center" }} />
+            <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>WhatsApp</span>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <style>{SIDEBAR_STYLES}</style>
@@ -377,8 +567,48 @@ export default function AdminDashboard() {
         position: "fixed",
         inset: 0,
         display: "flex",
-        background: "#eef3ff"
+        background: "#eef3ff",
+        overflow: "hidden",
       }}>
+        {/* Mobile drawer */}
+        <div
+          className={`amc-mobile-drawer-backdrop ${mobileNavOpen ? "open" : ""}`}
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden={!mobileNavOpen}
+        />
+        <div className={`amc-mobile-drawer ${mobileNavOpen ? "open" : ""}`}>
+          <div className="amc-mobile-drawer-header">
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{
+                width: "26px",
+                height: "26px",
+                background: "#f59e0b",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+                <PaperPlane size={16} color="#0d2247" />
+              </div>
+              <div>
+                <div style={{ color: "#f59e0b", fontWeight: 700, fontSize: "14px" }}>AMC</div>
+                <div style={{ color: "rgba(245,158,11,0.7)", fontSize: "10px" }}>Control Tower</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="amc-mobile-menu-btn"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close menu"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
+            {renderNavItems(selectTab)}
+          </div>
+        </div>
+
         {/* Sidebar */}
         <div className="amc-sidebar">
           {/* Brand */}
@@ -405,40 +635,7 @@ export default function AdminDashboard() {
 
           {/* Nav Items */}
           <div style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
-            {NAV_ITEMS.map((item, idx) => (
-              item.section ? (
-                <div key={`sec-${idx}`} className="amc-nav-label" style={{ padding: "10px 14px 4px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(245,158,11,0.55)" }}>
-                  {item.section}
-                </div>
-              ) : (
-                <div
-                  key={item.id}
-                  className={`amc-nav-item ${activeTab === item.id ? "active" : ""}`}
-                  onClick={() => setActiveTab(item.id)}
-                >
-                  <item.Icon size={18} style={{ width: "22px", textAlign: "center" }} />
-                  <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>{item.label}</span>
-                </div>
-              )
-            ))}
-          </div>
-
-          {/* Settings — CRM config + WhatsApp Cloud API connection */}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0" }}>
-            <div
-              className={`amc-nav-item ${activeTab === "crm_settings" ? "active" : ""}`}
-              onClick={() => setActiveTab("crm_settings")}
-            >
-              <SlidersHorizontal size={18} style={{ width: "22px", textAlign: "center" }} />
-              <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>CRM Settings</span>
-            </div>
-            <div
-              className={`amc-nav-item ${activeTab === "settings" ? "active" : ""}`}
-              onClick={() => setActiveTab("settings")}
-            >
-              <Smartphone size={18} style={{ width: "22px", textAlign: "center" }} />
-              <span className="amc-nav-label" style={{ fontSize: "14px", fontWeight: 600 }}>WhatsApp</span>
-            </div>
+            {renderNavItems(selectTab)}
           </div>
 
           {/* Animated clouds + plane at bottom */}
@@ -456,10 +653,27 @@ export default function AdminDashboard() {
         </div>
 
         {/* Main Content */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+          <div className="amc-mobile-topbar">
+            <button
+              type="button"
+              className="amc-mobile-menu-btn"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {activeTabLabel}
+              </div>
+              <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)" }}>Control Tower</div>
+            </div>
+          </div>
+
           {/* Sky Header */}
           {showSkyHeader && (
-            <div style={{
+            <div className="amc-sky-header" style={{
               height: "180px",
               background: "linear-gradient(135deg, #b8d4f5 0%, #c8e0f8 30%, #d8eaff 60%, #a8c8f0 100%)",
               position: "relative",
@@ -467,18 +681,18 @@ export default function AdminDashboard() {
               flexShrink: 0
             }}>
               {/* Drifting clouds */}
-              <div style={{ position: "absolute", left: "5%", top: "20px", zIndex: 2, animation: "cloud-drift 12s ease-in-out infinite" }}>
+              <div className="amc-sky-decor" style={{ position: "absolute", left: "5%", top: "20px", zIndex: 2, animation: "cloud-drift 12s ease-in-out infinite" }}>
                 <Cloud width={120} opacity={0.4} />
               </div>
-              <div style={{ position: "absolute", left: "45%", top: "60px", zIndex: 2, animation: "cloud-drift2 15s ease-in-out infinite" }}>
+              <div className="amc-sky-decor" style={{ position: "absolute", left: "45%", top: "60px", zIndex: 2, animation: "cloud-drift2 15s ease-in-out infinite" }}>
                 <Cloud width={100} opacity={0.35} />
               </div>
-              <div style={{ position: "absolute", right: "15%", top: "10px", zIndex: 2, animation: "cloud-drift 18s ease-in-out infinite" }}>
+              <div className="amc-sky-decor" style={{ position: "absolute", right: "15%", top: "10px", zIndex: 2, animation: "cloud-drift 18s ease-in-out infinite" }}>
                 <Cloud width={90} opacity={0.3} />
               </div>
 
               {/* Flight paths SVG */}
-              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 3 }} preserveAspectRatio="none" viewBox="0 0 730 180">
+              <svg className="amc-sky-decor" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 3 }} preserveAspectRatio="none" viewBox="0 0 730 180">
                 <path d="M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70" fill="none" stroke="white" strokeWidth="1.5" strokeOpacity="0.55" strokeDasharray="6 5">
                   <animate attributeName="stroke-dashoffset" from="0" to="-33" dur="2s" repeatCount="indefinite"/>
                 </path>
@@ -491,7 +705,7 @@ export default function AdminDashboard() {
               </svg>
 
               {/* Planes on paths */}
-              <div style={{
+              <div className="amc-sky-decor" style={{
                 position: "absolute",
                 zIndex: 4,
                 offsetPath: "path('M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70')",
@@ -499,7 +713,7 @@ export default function AdminDashboard() {
               }}>
                 <PaperPlane size={22} color="#ffffff" />
               </div>
-              <div style={{
+              <div className="amc-sky-decor" style={{
                 position: "absolute",
                 zIndex: 4,
                 offsetPath: "path('M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72')",
@@ -508,7 +722,7 @@ export default function AdminDashboard() {
               }}>
                 <PaperPlane size={18} color="#f59e0b" />
               </div>
-              <div style={{
+              <div className="amc-sky-decor" style={{
                 position: "absolute",
                 zIndex: 4,
                 offsetPath: "path('M -10 135 Q 90 75 185 115 Q 270 150 360 90 Q 440 40 540 105 Q 615 140 730 105')",
@@ -519,7 +733,7 @@ export default function AdminDashboard() {
                 <PaperPlane size={15} color="#ffffff" />
               </div>
               {/* Plane 4: white, 14px, follows path 1 with delay */}
-              <div style={{
+              <div className="amc-sky-decor" style={{
                 position: "absolute",
                 zIndex: 4,
                 offsetPath: "path('M -30 110 Q 80 30 200 80 Q 320 125 460 45 Q 560 10 730 70')",
@@ -529,7 +743,7 @@ export default function AdminDashboard() {
                 <PaperPlane size={14} color="#ffffff" />
               </div>
               {/* Plane 5: amber, 20px, new path */}
-              <div style={{
+              <div className="amc-sky-decor" style={{
                 position: "absolute",
                 zIndex: 4,
                 offsetPath: "path('M -20 70 Q 100 135 220 70 Q 340 15 480 85 Q 580 130 730 78')",
@@ -539,7 +753,7 @@ export default function AdminDashboard() {
                 <PaperPlane size={20} color="#f59e0b" />
               </div>
               {/* Plane 6: white, 16px, follows path 2 */}
-              <div style={{
+              <div className="amc-sky-decor" style={{
                 position: "absolute",
                 zIndex: 4,
                 offsetPath: "path('M -20 40 Q 70 105 170 52 Q 250 15 340 78 Q 420 125 520 58 Q 600 15 730 72')",
@@ -550,7 +764,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Big floating plane */}
-              <div style={{
+              <div className="amc-sky-plane-big" style={{
                 position: "absolute",
                 right: "28px",
                 bottom: "8px",
@@ -562,16 +776,16 @@ export default function AdminDashboard() {
 
               {/* Header text */}
               <div style={{ position: "absolute", left: "24px", top: "24px", zIndex: 5 }}>
-                <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#0d2247" }}>
+                <h1 className="amc-sky-title" style={{ margin: 0, fontSize: "26px", fontWeight: 800, color: "#0d2247" }}>
                   Control Tower ✈️
                 </h1>
-                <p style={{ margin: "4px 0 0", fontSize: "14px", color: "#3b5998" }}>
+                <p className="amc-sky-subtitle" style={{ margin: "4px 0 0", fontSize: "14px", color: "#3b5998" }}>
                   Ready to inspire young aviators today?
                 </p>
               </div>
 
               {/* Live badge */}
-              <div style={{
+              <div className="amc-sky-live-badge" style={{
                 position: "absolute",
                 right: "24px",
                 top: "24px",
@@ -597,7 +811,7 @@ export default function AdminDashboard() {
           )}
 
           {activeTab === "dashboard" && (
-            <div className="stats-row" style={{
+            <div className="stats-row amc-stats-row" style={{
               display: "flex",
               gap: "16px",
               padding: "16px 18px",
@@ -613,7 +827,7 @@ export default function AdminDashboard() {
           )}
 
           {/* Tab Content — flex column only for full-height tabs; scroll tabs use block layout so content isn't clipped */}
-          <div className="dashboard-root" style={{
+          <div className={`dashboard-root amc-dashboard-root${activeTab === "conversations" ? " amc-dashboard-root--flush" : ""}`} style={{
             flex: 1,
             overflow: isFullHeightTab ? "hidden" : "auto",
             overflowY: isFullHeightTab ? "hidden" : "auto",
@@ -721,7 +935,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv, setAc
   const dotsToShow = Math.min(activeConversationCount || 0, radarDots.length);
 
   return (
-    <div style={{ display: "flex", gap: "20px" }}>
+    <div className="amc-dashboard-home" style={{ display: "flex", gap: "20px" }}>
       {/* Left Column */}
       <div style={{ flex: 1 }}>
         <h1 style={{ fontSize: "20px", fontWeight: 700, color: "#0d2247", margin: "0 0 4px" }}>
@@ -732,7 +946,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv, setAc
         </p>
 
         {/* Recent Registrations */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+        <div className="amc-view-all-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
           <h2 style={{ fontSize: "16px", fontWeight: 600, color: "#1e293b", margin: 0 }}>
             Recent Registrations
           </h2>
@@ -785,7 +999,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv, setAc
                   }}
                 >
                   <div style={{ width: "4px", background: accentColor }} />
-                  <div style={{ flex: 1, padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div className="amc-reg-card-inner" style={{ flex: 1, padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: "15px", color: "#1e293b" }}>
                         {row.parent_name}
@@ -797,7 +1011,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv, setAc
                         {row.batch_preference || "No batch selected"}
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
+                    <div className="amc-reg-card-status" style={{ textAlign: "right" }}>
                       <span style={{
                         display: "inline-block",
                         padding: "4px 12px",
@@ -823,7 +1037,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv, setAc
       </div>
 
       {/* Right Column */}
-      <div style={{ width: "260px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div className="amc-dashboard-sidebar" style={{ width: "260px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "16px" }}>
         {/* Live Radar Card */}
         <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "16px" }}>
           <div style={{ fontSize: "13px", fontWeight: 500, color: "#0d2247", marginBottom: "2px" }}>Live Radar</div>
@@ -999,7 +1213,7 @@ function DashboardHome({ rows, confirmedCount, onViewAll, handleExportCsv, setAc
 
 function StatCard({ accent, Icon, value, label }) {
   return (
-    <div style={{
+    <div className="amc-stat-card" style={{
       flex: 1,
       background: "#fff",
       borderRadius: "10px",
@@ -1020,8 +1234,8 @@ function StatCard({ accent, Icon, value, label }) {
           <Icon size={14} style={{ color: accent }} />
         </div>
         <div>
-          <div style={{ fontSize: "28px", fontWeight: 700, color: "#1e293b" }}>{value}</div>
-          <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3px" }}>{label}</div>
+          <div className="amc-stat-card-value" style={{ fontSize: "28px", fontWeight: 700, color: "#1e293b" }}>{value}</div>
+          <div className="amc-stat-card-label" style={{ fontSize: "12px", color: "#64748b", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.3px" }}>{label}</div>
         </div>
       </div>
     </div>

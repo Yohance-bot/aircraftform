@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { User } from "lucide-react";
+import { User, ArrowLeft } from "lucide-react";
 
 import {
   fetchConversations,
@@ -62,6 +62,23 @@ const DEFAULT_MENU = {
   button: "View Options",
   sections: DEFAULT_MENU_SECTIONS,
 };
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia(`(max-width: ${breakpoint - 1}px)`).matches
+      : false
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [breakpoint]);
+
+  return isMobile;
+}
 
 function relativeTime(timestamp) {
   if (!timestamp) return "";
@@ -189,6 +206,7 @@ export default function ConversationsPanel({ adminKey }) {
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     loadConversations();
@@ -297,6 +315,15 @@ export default function ConversationsPanel({ adminKey }) {
     }
   }
 
+  function handleBackToList() {
+    setSelectedPhone(null);
+    setSelectedConvo(null);
+    setMessages([]);
+    setSendError("");
+  }
+
+  const showMobileChat = isMobile && selectedPhone;
+
   const filteredConversations = conversations.filter((c) => {
     if (bucketFilter !== "all" && c.bucket !== bucketFilter) return false;
     if (searchQuery.trim()) {
@@ -314,7 +341,11 @@ export default function ConversationsPanel({ adminKey }) {
   return (
     <div className="flex h-full w-full overflow-hidden bg-white">
       {/* Left Panel — Chat list (WhatsApp sidebar) */}
-      <div className="flex-shrink-0 border-r border-[#e9edef] flex flex-col bg-white w-[360px] min-w-[300px]">
+      <div
+        className={`${
+          showMobileChat ? "hidden" : "flex"
+        } md:flex flex-shrink-0 border-r border-[#e9edef] flex-col bg-white w-full md:w-[360px] md:min-w-[300px]`}
+      >
         <div className="px-3 py-3 bg-[#f0f2f5] border-b border-[#e9edef] space-y-2">
           <input
             type="text"
@@ -358,7 +389,11 @@ export default function ConversationsPanel({ adminKey }) {
       </div>
 
       {/* Right Panel — Chat view */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#efeae2]">
+      <div
+        className={`${
+          isMobile && !selectedPhone ? "hidden" : "flex"
+        } md:flex flex-1 flex-col min-w-0 bg-[#efeae2]`}
+      >
         {!selectedPhone ? (
           <div className="flex-1 flex flex-col items-center justify-center text-[#41525d] bg-[#f0f2f5] border-b-[6px] border-[#00a884]">
             <div className="text-[32px] mb-4">💬</div>
@@ -377,6 +412,7 @@ export default function ConversationsPanel({ adminKey }) {
               conversation={selectedConvo}
               onBucketChange={handleBucketChange}
               onToggleBotPause={handleToggleBotPause}
+              onBack={isMobile ? handleBackToList : undefined}
             />
 
             {selectedConvo.bot_paused && (
@@ -403,7 +439,7 @@ export default function ConversationsPanel({ adminKey }) {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="px-4 py-2 bg-[#f0f2f5] border-t border-[#e9edef] flex gap-2">
+            <div className="px-3 sm:px-4 py-2 bg-[#f0f2f5] border-t border-[#e9edef] flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => handleBucketChange("payment_confirmed")}
@@ -494,29 +530,39 @@ function ConversationRow({ conversation, selected, onClick }) {
   );
 }
 
-function ChatHeader({ conversation, onBucketChange, onToggleBotPause }) {
+function ChatHeader({ conversation, onBucketChange, onToggleBotPause, onBack }) {
   const c = conversation;
 
   return (
-    <div className="px-4 py-2.5 bg-[#f0f2f5] border-b border-[#e9edef]">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="px-3 sm:px-4 py-2.5 bg-[#f0f2f5] border-b border-[#e9edef]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="md:hidden flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[#54656f] hover:bg-[#e9edef]"
+              aria-label="Back to conversations"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
           <Avatar name={c.parent_name} phone={c.phone} size={40} />
           <div className="min-w-0">
             <h2 className="font-normal text-[16px] text-[#111b21] truncate">
               {c.parent_name || "Unknown"}
             </h2>
-            <div className="text-[13px] text-[#667781] truncate">
+            <div className="text-[12px] sm:text-[13px] text-[#667781] truncate">
               {c.child_name && <span>{c.child_name} · </span>}
               <span>{c.phone}</span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <select
             value={c.bucket}
             onChange={(e) => onBucketChange(e.target.value)}
-            className={`text-[11px] px-2 py-1 rounded-md border-0 font-medium focus:outline-none focus:ring-1 focus:ring-[#00a884] ${
+            className={`text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-1 rounded-md border-0 font-medium focus:outline-none focus:ring-1 focus:ring-[#00a884] max-w-[92px] sm:max-w-none truncate ${
               BUCKET_COLORS[c.bucket] || "bg-[#e9edef] text-[#54656f]"
             }`}
           >
@@ -529,13 +575,13 @@ function ChatHeader({ conversation, onBucketChange, onToggleBotPause }) {
           <button
             type="button"
             onClick={onToggleBotPause}
-            className={`text-[11px] px-3 py-1.5 rounded-md font-medium transition-colors ${
+            className={`text-[10px] sm:text-[11px] px-2 sm:px-3 py-1.5 rounded-md font-medium transition-colors whitespace-nowrap ${
               c.bot_paused
                 ? "bg-[#fff3cd] text-[#856404] hover:bg-[#ffe69c]"
                 : "bg-[#d9fdd3] text-[#008069] hover:bg-[#c5f0bf]"
             }`}
           >
-            {c.bot_paused ? "Bot Paused" : "Bot Active"}
+            {c.bot_paused ? "Paused" : "Active"}
           </button>
         </div>
       </div>
@@ -546,7 +592,7 @@ function ChatHeader({ conversation, onBucketChange, onToggleBotPause }) {
 function InteractiveMenuCard({ menu, isOutgoing, timestamp }) {
   return (
     <div
-      className={`max-w-[420px] rounded-lg shadow-sm overflow-hidden ${
+      className={`w-full max-w-[420px] rounded-lg shadow-sm overflow-hidden ${
         isOutgoing ? "bg-[#d9fdd3]" : "bg-white"
       }`}
     >
@@ -635,7 +681,7 @@ function MessageBubble({ message, conversation }) {
   return (
     <div className={`flex ${alignClass} mb-2`}>
       <div
-        className={`max-w-[65%] min-w-[72px] rounded-lg shadow-sm ${bubbleBg}`}
+        className={`max-w-[85%] sm:max-w-[65%] min-w-[72px] rounded-lg shadow-sm ${bubbleBg}`}
         style={{
           borderTopLeftRadius: isIncoming ? "0" : "7.5px",
           borderTopRightRadius: !isIncoming ? "0" : "7.5px",
