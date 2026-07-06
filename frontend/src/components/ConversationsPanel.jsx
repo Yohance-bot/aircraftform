@@ -700,6 +700,14 @@ function MessageBubble({ message, conversation }) {
               {time}
             </span>
           </div>
+          {!isIncoming && message.delivery_status === "failed" && (
+            <div className="mt-1 text-[11px] text-red-600 font-medium">
+              Not delivered{message.delivery_error ? `: ${message.delivery_error}` : ""}
+            </div>
+          )}
+          {!isIncoming && message.delivery_status === "sent" && (
+            <div className="mt-0.5 text-[10px] text-[#8696a0]">Sent to WhatsApp</div>
+          )}
         </div>
       </div>
     </div>

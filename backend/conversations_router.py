@@ -20,7 +20,8 @@ from conversation_models import AdminUser, Conversation, Message
 from crm_service import log_timeline
 from database import get_db
 from marketing_service import build_tracked_body, create_campaign, personalise, record_send
-from whatsapp_messages import send_text, send_text_result, send_text_tracked
+from whatsapp_credentials import get_active_display_phone_digits
+from whatsapp_messages import send_text, send_text_result, send_text_tracked, _to_meta_phone
 
 logger = logging.getLogger("amc.conversations")
 
@@ -66,6 +67,9 @@ class MessageOut(BaseModel):
     body: str
     sender: str
     timestamp: datetime
+    wa_message_id: str | None = None
+    delivery_status: str | None = None
+    delivery_error: str | None = None
 
     class Config:
         from_attributes = True
@@ -251,7 +255,19 @@ async def send_message_to_conversation(
                 detail="Conversation not found.",
             )
 
-        ok, wa_error = await send_text_result(phone, payload.message)
+        normalized = _to_meta_phone(phone) or phone
+        business_phone = get_active_display_phone_digits()
+        if business_phone and normalized == business_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "This number is your business WhatsApp line. "
+                    "Open the chat with your business contact on your personal "
+                    "WhatsApp to see messages sent to your customer number."
+                ),
+            )
+
+        ok, wa_error, wamid = await send_text_result(phone, payload.message)
         if not ok:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -264,6 +280,8 @@ async def send_message_to_conversation(
             direction="out",
             body=payload.message,
             sender="admin",
+            wa_message_id=wamid if wamid != "captured" else None,
+            delivery_status="sent" if wamid and wamid != "captured" else None,
         )
         db.add(msg)
 
@@ -274,7 +292,7 @@ async def send_message_to_conversation(
                      actor="admin", commit=False)
         db.commit()
 
-        return {"success": True}
+        return {"success": True, "whatsapp_message_id": wamid}
     except HTTPException:
         raise
     except Exception as exc:

@@ -102,6 +102,7 @@ def on_startup() -> None:
     ConvBase.metadata.create_all(bind=engine)
     ensure_registration_columns()
     ensure_conversation_columns()
+    ensure_message_columns()
     ensure_crm_columns()
     ensure_onboarding_session_columns()
     ensure_workshop_columns()
@@ -210,6 +211,22 @@ def ensure_conversation_columns() -> None:
             conn.execute(
                 text("ALTER TABLE conversations ADD COLUMN bucket VARCHAR(50) DEFAULT 'new_enquiry'")
             )
+
+
+def ensure_message_columns() -> None:
+    """Add WhatsApp delivery tracking columns to messages if missing."""
+    inspector = inspect(engine)
+    if "messages" not in inspector.get_table_names():
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns("messages")}
+    with engine.begin() as conn:
+        if "wa_message_id" not in existing_columns:
+            conn.execute(text("ALTER TABLE messages ADD COLUMN wa_message_id VARCHAR(128)"))
+        if "delivery_status" not in existing_columns:
+            conn.execute(text("ALTER TABLE messages ADD COLUMN delivery_status VARCHAR(20)"))
+        if "delivery_error" not in existing_columns:
+            conn.execute(text("ALTER TABLE messages ADD COLUMN delivery_error TEXT"))
 
 
 def ensure_registration_columns() -> None:

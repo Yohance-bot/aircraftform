@@ -27,6 +27,7 @@ from admin_agent import handle_admin_message, is_admin_phone
 from conversation_models import Conversation, Message
 from crm_scoring import recompute_score
 from crm_service import log_timeline, touch_activity
+from delivery_service import handle_conversation_delivery_statuses
 import marketing_service
 from database import get_db
 from groq_agent import FALLBACK_ANSWER, groq_rag_answer
@@ -547,8 +548,13 @@ async def receive_message(request: Request, db: Session = Depends(get_db)):
                     # A "messages" change carries either inbound messages or
                     # delivery-status updates (delivered/read/failed).
                     if value.get("statuses"):
+                        statuses = value.get("statuses") or []
                         try:
-                            marketing_service.handle_statuses(db, value.get("statuses") or [])
+                            handle_conversation_delivery_statuses(db, statuses)
+                        except Exception as exc:  # pragma: no cover - defensive
+                            logger.warning("handle_conversation_delivery_statuses failed: %s", exc)
+                        try:
+                            marketing_service.handle_statuses(db, statuses)
                         except Exception as exc:  # pragma: no cover - defensive
                             logger.warning("handle_statuses failed: %s", exc)
                     if value.get("messages"):

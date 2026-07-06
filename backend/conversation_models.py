@@ -86,6 +86,9 @@ class Message(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )
+    wa_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    delivery_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    delivery_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class KnowledgeEntry(Base):

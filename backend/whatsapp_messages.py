@@ -243,8 +243,11 @@ async def send_text(phone: str, message: str) -> None:
     await send_whatsapp(payload)
 
 
-async def send_text_result(phone: str, message: str) -> tuple[bool, str | None]:
-    """Send plain text and report whether Meta accepted the message."""
+async def send_text_result(phone: str, message: str) -> tuple[bool, str | None, str | None]:
+    """Send plain text and report whether Meta accepted the message.
+
+    Returns (ok, error_message, whatsapp_message_id).
+    """
     normalized = _to_meta_phone(phone) or phone
     payload = {
         "messaging_product": "whatsapp",
@@ -255,7 +258,27 @@ async def send_text_result(phone: str, message: str) -> tuple[bool, str | None]:
     from whatsapp_client import send_whatsapp_result
 
     resp, err = await send_whatsapp_result(payload)
-    return resp is not None, err
+    if resp is None:
+        return False, err, None
+    if resp.get("captured"):
+        return True, None, "captured"
+    try:
+        wamid = resp["messages"][0]["id"]
+    except (KeyError, IndexError, TypeError):
+        return False, "WhatsApp accepted the request but did not return a message id.", None
+
+    contacts = resp.get("contacts") or []
+    if contacts:
+        wa_id = contacts[0].get("wa_id")
+        if wa_id and wa_id != normalized:
+            logger.info(
+                "WhatsApp normalized recipient %s -> %s",
+                normalized,
+                wa_id,
+            )
+
+    logger.info("WhatsApp message queued wamid=%s to=%s", wamid, normalized)
+    return True, None, wamid
 
 
 async def send_text_tracked(phone: str, message: str) -> str | None:
